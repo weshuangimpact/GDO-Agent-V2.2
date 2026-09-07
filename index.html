@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO Agentic Framework - Physical AI (HITL Edition)</title>
+    <title>GDO Agentic Framework - Physical AI (HITL Dual-Logging Edition)</title>
     <style>
         :root { --primary: #0056b3; --bg: #f4f6f8; --panel-bg: #ffffff; --border: #e1e4e8; --success: #28a745; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; padding: 20px; }
@@ -28,7 +28,6 @@
         .step-container { margin-bottom: 20px; border-left: 4px solid var(--primary); padding-left: 10px; }
         .step-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 5px; }
         .auto-run-label { font-size: 0.85rem; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 5px; color: #555; }
-        /* 替換原本的 pre 為可編輯的 textarea */
         textarea.json-editor { width: 100%; height: 200px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; border: none; font-family: monospace; font-size: 0.85rem; box-sizing: border-box; resize: vertical; margin-top: 5px; }
         textarea.json-editor:focus { outline: 1px solid var(--primary); }
     </style>
@@ -66,9 +65,9 @@
         <button id="startBtn" onclick="startPipeline()">啟動 GDO 演化管線 (Step 1)</button>
     </div>
 
-    <!-- 右側：Agentic 執行管線 (支援 HITL) -->
+    <!-- 右側：Agentic 執行管線 (支援 HITL 雙軌記錄) -->
     <div class="panel">
-        <h2>2. Agentic 執行管線 (HITL 編輯模式)</h2>
+        <h2>2. Agentic 執行管線 (HITL 雙軌編輯模式)</h2>
         
         <div class="step-container" id="step1">
             <div class="step-header">
@@ -244,8 +243,12 @@
         const prompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及人類語意建立結構化環境狀態模型。要求輸出JSON包含: environment_entities, target_object(pose與orientation盡量轉為數值, observable_properties), spatial_relations, robot_context, uncertainties(name, estimated_value, confidence)。\n人類補充語意: ${context}`;
         
         try {
-            const envState = await callGemini(systemState.apiKey, prompt, systemState.imageBase64);
-            setEditorValue('outVlm', envState);
+            const envStateRaw = await callGemini(systemState.apiKey, prompt, systemState.imageBase64);
+            
+            // 記錄 AI 原始生成版 (Raw Version)
+            appendEvent("vlm_bootstrap_raw", "vlm_agent", envStateRaw);
+            
+            setEditorValue('outVlm', envStateRaw);
             
             if (document.getElementById('autoStep2').checked) {
                 runStep2();
@@ -261,15 +264,19 @@
         document.getElementById('btnCont2').style.display = 'none';
         
         try {
-            // 讀取可能被人類編輯過的 Step 1 輸出
+            // 讀取人類確認/覆寫後的 Step 1 版本並記錄
             systemState.envState = parseEditorJSON('outVlm', 'Step 1');
-            appendEvent("vlm_bootstrap_final", "vlm_agent_with_human_override", systemState.envState);
+            appendEvent("vlm_bootstrap_final", "human_engineer_override", systemState.envState);
 
             document.getElementById('outUnderstanding').value = "GDO 失效模式推導中...";
             const prompt = `你是高階 GDO Agent。請依據 Goal: ${systemState.goal}, Constraints: ${JSON.stringify(systemState.constraints)}, Environment State: ${JSON.stringify(systemState.envState)}, Original BT: ${JSON.stringify(systemState.origBt)}，推導失效模式。請嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
             
-            const gdoUnderstand = await callGemini(systemState.apiKey, prompt);
-            setEditorValue('outUnderstanding', gdoUnderstand);
+            const gdoUnderstandRaw = await callGemini(systemState.apiKey, prompt);
+            
+            // 記錄 AI 原始生成版 (Raw Version)
+            appendEvent("gdo_semantic_model_raw", "gdo_agent", gdoUnderstandRaw);
+
+            setEditorValue('outUnderstanding', gdoUnderstandRaw);
             
             if (document.getElementById('autoStep3').checked) {
                 runStep3();
@@ -285,14 +292,19 @@
         document.getElementById('btnCont3').style.display = 'none';
         
         try {
+            // 讀取人類確認/覆寫後的 Step 2 版本並記錄
             systemState.semanticModel = parseEditorJSON('outUnderstanding', 'Step 2');
-            appendEvent("gdo_semantic_model_final", "gdo_agent_with_human_override", systemState.semanticModel);
+            appendEvent("gdo_semantic_model_final", "human_engineer_override", systemState.semanticModel);
 
             document.getElementById('outPlan').value = "GDO 實驗矩陣設計中...";
             const prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(systemState.semanticModel)} 與 VLM Uncertainties: ${JSON.stringify(systemState.envState.uncertainties)}。針對 VLM 信心度較低的數值變數，設計邊界測試情境。嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
             
-            const plan = await callGemini(systemState.apiKey, prompt);
-            setEditorValue('outPlan', plan);
+            const planRaw = await callGemini(systemState.apiKey, prompt);
+            
+            // 記錄 AI 原始生成版 (Raw Version)
+            appendEvent("gdo_exploration_plan_raw", "gdo_agent", planRaw);
+
+            setEditorValue('outPlan', planRaw);
             
             if (document.getElementById('autoStep4').checked) {
                 runStep4();
@@ -308,8 +320,9 @@
         document.getElementById('btnCont4').style.display = 'none';
         
         try {
+            // 讀取人類確認/覆寫後的 Step 3 版本並記錄
             systemState.plan = parseEditorJSON('outPlan', 'Step 3');
-            appendEvent("gdo_exploration_plan_final", "gdo_agent_with_human_override", systemState.plan);
+            appendEvent("gdo_exploration_plan_final", "human_engineer_override", systemState.plan);
 
             document.getElementById('outCandidate').value = "GDO 候選策略重構中...";
             const historicalData = document.getElementById('historicalText').value.trim();
@@ -317,8 +330,12 @@
             
             const prompt = `你是 GDO Agent。請依據:\n1. Original BT: ${JSON.stringify(systemState.origBt)}\n2. Semantic Model: ${JSON.stringify(systemState.semanticModel)}\n3. Exploration Plan: ${JSON.stringify(systemState.plan)}${histInstruction}\n自主修改原始 BT。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
             
-            const candidateResponse = await callGemini(systemState.apiKey, prompt);
-            setEditorValue('outCandidate', candidateResponse);
+            const candidateResponseRaw = await callGemini(systemState.apiKey, prompt);
+            
+            // 記錄 AI 原始生成版 (Raw Version)
+            appendEvent("gdo_candidate_bt_raw", "gdo_agent", candidateResponseRaw);
+
+            setEditorValue('outCandidate', candidateResponseRaw);
             
             if (document.getElementById('autoStep5').checked) {
                 runStep5();
@@ -332,9 +349,11 @@
     function runStep5() {
         document.getElementById('btnCont4').style.display = 'none';
         try {
-            const candidateData = parseEditorJSON('outCandidate', 'Step 4');
-            const candidateBt = { Action: candidateData.Action, Nodes: candidateData.Nodes };
-            appendEvent("gdo_candidate_bt_final", "gdo_agent_with_human_override", candidateData);
+            // 讀取人類確認/覆寫後的 Step 4 版本並記錄
+            const candidateDataFinal = parseEditorJSON('outCandidate', 'Step 4');
+            appendEvent("gdo_candidate_bt_final", "human_engineer_override", candidateDataFinal);
+
+            const candidateBt = { Action: candidateDataFinal.Action, Nodes: candidateDataFinal.Nodes };
             
             runGovernance(candidateBt, systemState.constraints);
             document.getElementById('startBtn').disabled = false;
