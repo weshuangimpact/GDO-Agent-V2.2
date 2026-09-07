@@ -10,13 +10,14 @@
         .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .panel { background: var(--panel-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid var(--border); }
         .full-width { grid-column: span 2; }
-        h2 { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; }
+        h2 { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
+        .metrics { font-size: 0.85rem; font-weight: normal; color: #555; background: #e9ecef; padding: 4px 8px; border-radius: 4px; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
         input[type="text"], input[type="password"], textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
         button { background-color: var(--primary); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 15px; width: 100%; transition: 0.3s; }
         button:hover { background-color: #004494; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; max-height: 300px; overflow-y: auto; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; }
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
         .status-allow { background-color: #d4edda; color: #155724; }
         .status-reject { background-color: #f8d7da; color: #721c24; }
@@ -36,16 +37,28 @@
         <input type="file" id="imageInput" accept="image/*">
         
         <label>語意上下文 (Semantic Context - 選填):</label>
-        <input type="text" id="semanticContext" placeholder="例如: 啤酒表面有冷凝水">
+        <input type="text" id="semanticContext" value="瓶身表面佈滿冷凝水，表面摩擦力極低。物件目前呈 25 度傾斜並倚靠金屬側壁，導致右側機械夾爪的進入空間受限。">
         
         <label>人類語意目標 (Semantic Goal):</label>
-        <input type="text" id="semanticGoal" value="穩定抓取啤酒，不要滑脫。">
+        <textarea id="semanticGoal" rows="3">在低摩擦力與傾斜姿態的物理干擾下，完成玻璃瓶的穩定抓取與提起。要求夾取過程具備容錯機制，絕對禁止物件滑脫，且嚴禁因夾取力道過大導致玻璃破裂。</textarea>
         
         <label>物理邊界限制 (Physical Constraints - JSON):</label>
-        <textarea id="constraints" rows="2">{"max_grip_force": 15, "max_velocity": 1.2}</textarea>
+        <textarea id="constraints" rows="3">{
+  "max_grip_force": 12,
+  "min_grip_force": 4,
+  "max_approach_velocity": 0.5,
+  "gripper_friction_coefficient": 0.2
+}</textarea>
         
         <label>原始行為樹 (Original BT - JSON):</label>
-        <textarea id="originalBt" rows="4">{"Action": "Sequence", "Nodes": [{"Node": "GoTo", "Location": "fridge"}, {"Node": "ApproachObject", "Target": "beer"}, {"Node": "CloseGripper", "grip_force": 10}]}</textarea>
+        <textarea id="originalBt" rows="5">{
+  "Action": "Sequence",
+  "Nodes": [
+    {"Node": "GoTo", "Location": "refrigerator_shelf"},
+    {"Node": "ApproachObject", "Target": "glass_bottle", "approach_speed": 0.8},
+    {"Node": "CloseGripper", "grip_force": 10}
+  ]
+}</textarea>
         
         <button id="startBtn" onclick="runPipeline()">啟動 GDO 演化管線</button>
     </div>
@@ -77,7 +90,10 @@
 
     <!-- 底部：治理裁決、Isaac 介面與證據鏈 -->
     <div class="panel full-width">
-        <h2>3. 治理、物理模擬與證據鏈 (Governance & Isaac Validation)</h2>
+        <h2>
+            3. 治理、物理模擬與證據鏈
+            <span class="metrics" id="tokenUsageDisplay">輸入 Token: 0 | 輸出 Token: 0 | 預估成本: $0.00000 USD</span>
+        </h2>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
             <div>
                 <strong>輸出治理裁決 (Agenverdict)</strong>
@@ -91,7 +107,7 @@
             </div>
             <div>
                 <strong>全域不可變證據鏈 (Flight Recorder)</strong>
-                <p>Trace Token: <span id="traceTokenLabel">未生成</span></p>
+                <p>Trace Token: <span id="traceTokenLabel" style="font-family: monospace;">未生成</span></p>
                 <button id="exportBtn" disabled onclick="exportFlightRecorder()">下載 Trace Evidence (JSON)</button>
             </div>
         </div>
@@ -103,6 +119,10 @@
     let flightRecorder = [];
     let currentTraceToken = "";
     let systemState = {};
+    
+    // Token 用量統計
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
     function generateUUID() {
         return 'tt_' + Math.random().toString(36).substring(2, 14);
@@ -116,6 +136,15 @@
             actor: actor,
             payload: payload
         });
+    }
+
+    function updateTokenUsage(inputCount, outputCount) {
+        totalInputTokens += (inputCount || 0);
+        totalOutputTokens += (outputCount || 0);
+        // Gemini 1.5/2.5 Flash 預估定價: 輸入 $0.075 / 1M, 輸出 $0.30 / 1M
+        const cost = ((totalInputTokens / 1000000) * 0.075) + ((totalOutputTokens / 1000000) * 0.30);
+        document.getElementById('tokenUsageDisplay').innerText = 
+            `輸入 Token: ${totalInputTokens} | 輸出 Token: ${totalOutputTokens} | 預估成本: $${cost.toFixed(5)} USD`;
     }
 
     // 呼叫 Gemini API 核心函數
@@ -140,9 +169,21 @@
         if (!response.ok) throw new Error("API 請求失敗：" + response.statusText);
         
         const data = await response.json();
+        
+        // 擷取並更新 Token 用量
+        if (data.usageMetadata) {
+            updateTokenUsage(data.usageMetadata.promptTokenCount, data.usageMetadata.candidatesTokenCount);
+        }
+
         let rawText = data.candidates[0].content.parts[0].text;
-        rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-        return JSON.parse(rawText);
+        
+        // 使用正則表達式強制擷取最外層的 { } 區塊，避免自然語言前綴導致 JSON.parse 失敗
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("無法從 LLM 回應中提取有效的 JSON 結構。\n原始回應：" + rawText);
+        }
+        
+        return JSON.parse(jsonMatch[0]);
     }
 
     // 圖片轉 Base64
@@ -169,6 +210,9 @@
         currentTraceToken = generateUUID();
         document.getElementById('traceTokenLabel').innerText = currentTraceToken;
         flightRecorder = [];
+        totalInputTokens = 0;
+        totalOutputTokens = 0;
+        updateTokenUsage(0, 0);
 
         try {
             const imgBase64 = await getBase64(imageFile);
@@ -181,7 +225,7 @@
 
             // Step 1: VLM
             document.getElementById('outVlm').innerText = "VLM 視覺推論中...";
-            const vlmPrompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及語意建立結構化環境狀態模型。要求輸出JSON包含: environment_entities, target_object(pose, orientation為數值, observable_properties), spatial_relations, robot_context, uncertainties(name, estimated_value, confidence)。\n語意補充: ${context}`;
+            const vlmPrompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及人類語意建立結構化環境狀態模型。要求輸出JSON包含: environment_entities, target_object(pose與orientation盡量轉為數值, observable_properties), spatial_relations, robot_context, uncertainties(name, estimated_value, confidence)。\n人類補充語意: ${context}`;
             const envState = await callGemini(apiKey, vlmPrompt, imgBase64);
             document.getElementById('outVlm').innerText = JSON.stringify(envState, null, 2);
             appendEvent("vlm_bootstrap", "vlm_agent", envState);
@@ -189,7 +233,7 @@
 
             // Step 2: GDO Understanding
             document.getElementById('outUnderstanding').innerText = "GDO 失效模式推導中...";
-            const step2Prompt = `你是 GDO Agent。請依據 Goal: ${goal}, Constraints: ${JSON.stringify(constraints)}, Environment: ${JSON.stringify(envState)}, Original BT: ${JSON.stringify(origBt)}，推導失效模式。輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
+            const step2Prompt = `你是高階 GDO Agent。請依據 Goal: ${goal}, Constraints: ${JSON.stringify(constraints)}, Environment State (含不確定性): ${JSON.stringify(envState)}, Original BT: ${JSON.stringify(origBt)}，推導失效模式。請嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
             const gdoUnderstand = await callGemini(apiKey, step2Prompt);
             document.getElementById('outUnderstanding').innerText = JSON.stringify(gdoUnderstand, null, 2);
             appendEvent("gdo_semantic_model", "gdo_agent", gdoUnderstand);
@@ -197,7 +241,7 @@
 
             // Step 3: Exploration Plan
             document.getElementById('outPlan').innerText = "GDO 實驗矩陣設計中...";
-            const step3Prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(gdoUnderstand)} 與 VLM Uncertainties: ${JSON.stringify(envState.uncertainties)}。設計邊界測試。輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
+            const step3Prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(gdoUnderstand)} 與 VLM Uncertainties: ${JSON.stringify(envState.uncertainties)}。針對 VLM 信心度較低的數值變數，設計對應的邊界測試情境。嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
             const plan = await callGemini(apiKey, step3Prompt);
             document.getElementById('outPlan').innerText = JSON.stringify(plan, null, 2);
             appendEvent("gdo_exploration_plan", "gdo_agent", plan);
@@ -205,7 +249,7 @@
 
             // Step 4: Candidate BT
             document.getElementById('outCandidate').innerText = "GDO 候選策略重構中...";
-            const step4Prompt = `你是 GDO Agent。依據前述推導，修改 Original BT。輸出 JSON: modification_rationale, Action, Nodes。`;
+            const step4Prompt = `你是 GDO Agent。請依據:\n1. Original BT: ${JSON.stringify(origBt)}\n2. Semantic Model: ${JSON.stringify(gdoUnderstand)}\n3. Exploration Plan: ${JSON.stringify(plan)}\n自主修改原始 BT。所有修改必須由失效模式與計畫推導。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
             const candidateResponse = await callGemini(apiKey, step4Prompt);
             const candidateBt = { Action: candidateResponse.Action, Nodes: candidateResponse.Nodes };
             document.getElementById('outCandidate').innerText = JSON.stringify(candidateResponse, null, 2);
@@ -223,7 +267,7 @@
         }
     }
 
-    // 決定性治理邏輯 (前端實作)
+    // 決定性治理邏輯
     function runGovernance(bt, constraints) {
         const maxForce = constraints.max_grip_force || 999;
         const forbidden = ["DeleteObject", "ForceDrop", "Explode"];
@@ -232,8 +276,8 @@
 
         function inspect(nodes) {
             for (let node of nodes) {
-                if (forbidden.includes(node.Node || node.Action)) return `REJECT: 包含危險動作 [${node.Node}]`;
-                if (node.grip_force > maxForce) return `REJECT: grip_force 超過極限 ${maxForce}`;
+                if (forbidden.includes(node.Node || node.Action)) return `REJECT: 包含危險動作 [${node.Node || node.Action}]`;
+                if (node.grip_force !== undefined && node.grip_force > maxForce) return `REJECT: grip_force 超過極限 ${maxForce}`;
                 if (node.Nodes && !inspect(node.Nodes).startsWith("ALLOW")) return "REJECT: 子節點違規";
                 if (node.Children && !inspect(node.Children).startsWith("ALLOW")) return "REJECT: 子節點違規";
             }
@@ -260,7 +304,7 @@
         }
     }
 
-    // Isaac Mock API
+    // Isaac API 介面
     function sendToIsaac() {
         document.getElementById('isaacBtn').disabled = true;
         document.getElementById('outIsaac').innerText = "已向 Isaac API (Endpoint: /api/v1/simulate) 發送 Candidate BT 與 Simulation Cases。\n等待物理沙箱運算完成...";
@@ -271,7 +315,7 @@
     function exportFlightRecorder() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(flightRecorder, null, 2));
         const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href",     dataStr     );
+        dlAnchorElem.setAttribute("href", dataStr);
         dlAnchorElem.setAttribute("download", `flight_recorder_${currentTraceToken}.json`);
         dlAnchorElem.click();
     }
