@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDO Agentic Framework - Physical AI</title>
+    <style>
+        :root { --primary: #0056b3; --bg: #f4f6f8; --panel-bg: #ffffff; --border: #e1e4e8; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { background: var(--panel-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid var(--border); }
+        .full-width { grid-column: span 2; }
+        h2 { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
+        input[type="text"], input[type="password"], textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        button { background-color: var(--primary); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 15px; width: 100%; transition: 0.3s; }
+        button:hover { background-color: #004494; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 0.85rem; max-height: 300px; overflow-y: auto; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .status-allow { background-color: #d4edda; color: #155724; }
+        .status-reject { background-color: #f8d7da; color: #721c24; }
+        .step-container { margin-bottom: 15px; border-left: 4px solid var(--primary); padding-left: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 左側：輸入與配置層 -->
+    <div class="panel">
+        <h2>1. 系統配置與環境輸入 (Environment Inputs)</h2>
+        <label>Gemini API Key:</label>
+        <input type="password" id="apiKey" placeholder="輸入 API Key (僅於本地瀏覽器執行)">
+        
+        <label>現場視覺影像 (Visual Input):</label>
+        <input type="file" id="imageInput" accept="image/*">
+        
+        <label>語意上下文 (Semantic Context - 選填):</label>
+        <input type="text" id="semanticContext" placeholder="例如: 啤酒表面有冷凝水">
+        
+        <label>人類語意目標 (Semantic Goal):</label>
+        <input type="text" id="semanticGoal" value="穩定抓取啤酒，不要滑脫。">
+        
+        <label>物理邊界限制 (Physical Constraints - JSON):</label>
+        <textarea id="constraints" rows="2">{"max_grip_force": 15, "max_velocity": 1.2}</textarea>
+        
+        <label>原始行為樹 (Original BT - JSON):</label>
+        <textarea id="originalBt" rows="4">{"Action": "Sequence", "Nodes": [{"Node": "GoTo", "Location": "fridge"}, {"Node": "ApproachObject", "Target": "beer"}, {"Node": "CloseGripper", "grip_force": 10}]}</textarea>
+        
+        <button id="startBtn" onclick="runPipeline()">啟動 GDO 演化管線</button>
+    </div>
+
+    <!-- 右側：即時執行狀態與輸出 -->
+    <div class="panel">
+        <h2>2. Agentic 執行管線 (Execution Pipeline)</h2>
+        
+        <div class="step-container" id="step1">
+            <strong>[Step 1] VLM 環境建模 (Environment Bootstrapping)</strong>
+            <pre id="outVlm">等待執行...</pre>
+        </div>
+
+        <div class="step-container" id="step2">
+            <strong>[Step 2] GDO 語意與失效分析</strong>
+            <pre id="outUnderstanding">等待執行...</pre>
+        </div>
+
+        <div class="step-container" id="step3">
+            <strong>[Step 3] 探索策略與 Isaac 測試矩陣 (Simulation Cases)</strong>
+            <pre id="outPlan">等待執行...</pre>
+        </div>
+
+        <div class="step-container" id="step4">
+            <strong>[Step 4] 候選策略產出 (Candidate BT)</strong>
+            <pre id="outCandidate">等待執行...</pre>
+        </div>
+    </div>
+
+    <!-- 底部：治理裁決、Isaac 介面與證據鏈 -->
+    <div class="panel full-width">
+        <h2>3. 治理、物理模擬與證據鏈 (Governance & Isaac Validation)</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+            <div>
+                <strong>輸出治理裁決 (Agenverdict)</strong>
+                <p id="govStatus">等待裁決...</p>
+                <pre id="outGov">...</pre>
+            </div>
+            <div>
+                <strong>Isaac 物理模擬 API (保留介面)</strong>
+                <button id="isaacBtn" disabled onclick="sendToIsaac()">傳送測試矩陣至 Isaac 叢集</button>
+                <pre id="outIsaac">等待候選策略與測試案例傳入...</pre>
+            </div>
+            <div>
+                <strong>全域不可變證據鏈 (Flight Recorder)</strong>
+                <p>Trace Token: <span id="traceTokenLabel">未生成</span></p>
+                <button id="exportBtn" disabled onclick="exportFlightRecorder()">下載 Trace Evidence (JSON)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 飛行紀錄儀狀態與全域變數
+    let flightRecorder = [];
+    let currentTraceToken = "";
+    let systemState = {};
+
+    function generateUUID() {
+        return 'tt_' + Math.random().toString(36).substring(2, 14);
+    }
+
+    function appendEvent(eventType, actor, payload) {
+        flightRecorder.push({
+            trace_token: currentTraceToken,
+            timestamp: new Date().toISOString(),
+            event_type: eventType,
+            actor: actor,
+            payload: payload
+        });
+    }
+
+    // 呼叫 Gemini API 核心函數
+    async function callGemini(apiKey, prompt, imageBase64 = null) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        let parts = [{ text: prompt }];
+        
+        if (imageBase64) {
+            const mimeType = imageBase64.split(';')[0].split(':')[1];
+            const base64Data = imageBase64.split(',')[1];
+            parts.push({
+                inlineData: { mimeType: mimeType, data: base64Data }
+            });
+        }
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: parts }] })
+        });
+        
+        if (!response.ok) throw new Error("API 請求失敗：" + response.statusText);
+        
+        const data = await response.json();
+        let rawText = data.candidates[0].content.parts[0].text;
+        rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(rawText);
+    }
+
+    // 圖片轉 Base64
+    function getBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    // 主執行管線
+    async function runPipeline() {
+        const apiKey = document.getElementById('apiKey').value;
+        const imageFile = document.getElementById('imageInput').files[0];
+        
+        if (!apiKey || !imageFile) {
+            alert("請輸入 API Key 並上傳視覺影像。");
+            return;
+        }
+
+        document.getElementById('startBtn').disabled = true;
+        currentTraceToken = generateUUID();
+        document.getElementById('traceTokenLabel').innerText = currentTraceToken;
+        flightRecorder = [];
+
+        try {
+            const imgBase64 = await getBase64(imageFile);
+            const context = document.getElementById('semanticContext').value;
+            const goal = document.getElementById('semanticGoal').value;
+            const constraints = JSON.parse(document.getElementById('constraints').value);
+            const origBt = JSON.parse(document.getElementById('originalBt').value);
+
+            appendEvent("session_start", "system", { goal, constraints, original_bt: origBt });
+
+            // Step 1: VLM
+            document.getElementById('outVlm').innerText = "VLM 視覺推論中...";
+            const vlmPrompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及語意建立結構化環境狀態模型。要求輸出JSON包含: environment_entities, target_object(pose, orientation為數值, observable_properties), spatial_relations, robot_context, uncertainties(name, estimated_value, confidence)。\n語意補充: ${context}`;
+            const envState = await callGemini(apiKey, vlmPrompt, imgBase64);
+            document.getElementById('outVlm').innerText = JSON.stringify(envState, null, 2);
+            appendEvent("vlm_bootstrap", "vlm_agent", envState);
+            systemState.envState = envState;
+
+            // Step 2: GDO Understanding
+            document.getElementById('outUnderstanding').innerText = "GDO 失效模式推導中...";
+            const step2Prompt = `你是 GDO Agent。請依據 Goal: ${goal}, Constraints: ${JSON.stringify(constraints)}, Environment: ${JSON.stringify(envState)}, Original BT: ${JSON.stringify(origBt)}，推導失效模式。輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
+            const gdoUnderstand = await callGemini(apiKey, step2Prompt);
+            document.getElementById('outUnderstanding').innerText = JSON.stringify(gdoUnderstand, null, 2);
+            appendEvent("gdo_semantic_model", "gdo_agent", gdoUnderstand);
+            systemState.semanticModel = gdoUnderstand;
+
+            // Step 3: Exploration Plan
+            document.getElementById('outPlan').innerText = "GDO 實驗矩陣設計中...";
+            const step3Prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(gdoUnderstand)} 與 VLM Uncertainties: ${JSON.stringify(envState.uncertainties)}。設計邊界測試。輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
+            const plan = await callGemini(apiKey, step3Prompt);
+            document.getElementById('outPlan').innerText = JSON.stringify(plan, null, 2);
+            appendEvent("gdo_exploration_plan", "gdo_agent", plan);
+            systemState.plan = plan;
+
+            // Step 4: Candidate BT
+            document.getElementById('outCandidate').innerText = "GDO 候選策略重構中...";
+            const step4Prompt = `你是 GDO Agent。依據前述推導，修改 Original BT。輸出 JSON: modification_rationale, Action, Nodes。`;
+            const candidateResponse = await callGemini(apiKey, step4Prompt);
+            const candidateBt = { Action: candidateResponse.Action, Nodes: candidateResponse.Nodes };
+            document.getElementById('outCandidate').innerText = JSON.stringify(candidateResponse, null, 2);
+            appendEvent("gdo_candidate_bt", "gdo_agent", candidateResponse);
+            systemState.candidateBt = candidateBt;
+
+            // Step 5: Governance
+            runGovernance(candidateBt, constraints);
+
+        } catch (error) {
+            alert("執行發生錯誤：" + error.message);
+            console.error(error);
+        } finally {
+            document.getElementById('startBtn').disabled = false;
+        }
+    }
+
+    // 決定性治理邏輯 (前端實作)
+    function runGovernance(bt, constraints) {
+        const maxForce = constraints.max_grip_force || 999;
+        const forbidden = ["DeleteObject", "ForceDrop", "Explode"];
+        let isValid = true;
+        let msg = "ALLOW: 邊界與結構檢查通過";
+
+        function inspect(nodes) {
+            for (let node of nodes) {
+                if (forbidden.includes(node.Node || node.Action)) return `REJECT: 包含危險動作 [${node.Node}]`;
+                if (node.grip_force > maxForce) return `REJECT: grip_force 超過極限 ${maxForce}`;
+                if (node.Nodes && !inspect(node.Nodes).startsWith("ALLOW")) return "REJECT: 子節點違規";
+                if (node.Children && !inspect(node.Children).startsWith("ALLOW")) return "REJECT: 子節點違規";
+            }
+            return "ALLOW";
+        }
+
+        if (!bt.Action || !bt.Nodes) {
+            isValid = false; msg = "REJECT: 缺少 Action 或 Nodes";
+        } else {
+            const res = inspect(bt.Nodes);
+            if (res !== "ALLOW") { isValid = false; msg = res; }
+        }
+
+        const statusEl = document.getElementById('govStatus');
+        statusEl.className = isValid ? "status-badge status-allow" : "status-badge status-reject";
+        statusEl.innerText = isValid ? "ALLOW" : "REJECT";
+        document.getElementById('outGov').innerText = msg;
+        
+        appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg });
+
+        if (isValid) {
+            document.getElementById('isaacBtn').disabled = false;
+            document.getElementById('exportBtn').disabled = false;
+        }
+    }
+
+    // Isaac Mock API
+    function sendToIsaac() {
+        document.getElementById('isaacBtn').disabled = true;
+        document.getElementById('outIsaac').innerText = "已向 Isaac API (Endpoint: /api/v1/simulate) 發送 Candidate BT 與 Simulation Cases。\n等待物理沙箱運算完成...";
+        appendEvent("isaac_api_request", "system_interface", { target: "isaac_sim_cluster", cases: systemState.plan.simulation_cases });
+    }
+
+    // 匯出飛行紀錄儀
+    function exportFlightRecorder() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(flightRecorder, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href",     dataStr     );
+        dlAnchorElem.setAttribute("download", `flight_recorder_${currentTraceToken}.json`);
+        dlAnchorElem.click();
+    }
+</script>
+</body>
+</html>
