@@ -13,7 +13,7 @@
         h2 { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
         .metrics { font-size: 0.85rem; font-weight: normal; color: #555; background: #e9ecef; padding: 4px 8px; border-radius: 4px; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
-        input[type="text"], input[type="password"], textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        input[type="text"], input[type="password"], textarea, input[type="file"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
         button { background-color: var(--primary); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 15px; width: 100%; transition: 0.3s; }
         button:hover { background-color: #004494; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
@@ -22,6 +22,9 @@
         .status-allow { background-color: #d4edda; color: #155724; }
         .status-reject { background-color: #f8d7da; color: #721c24; }
         .step-container { margin-bottom: 15px; border-left: 4px solid var(--primary); padding-left: 10px; }
+        .btn-secondary { background-color: #6c757d; margin-top: 10px; }
+        .btn-secondary:hover { background-color: #5a6268; }
+        .file-group { display: flex; gap: 10px; align-items: center; }
     </style>
 </head>
 <body>
@@ -43,23 +46,17 @@
         <textarea id="semanticGoal" rows="3">在低摩擦力與傾斜姿態的物理干擾下，完成玻璃瓶的穩定抓取與提起。要求夾取過程具備容錯機制，絕對禁止物件滑脫，且嚴禁因夾取力道過大導致玻璃破裂。</textarea>
         
         <label>物理邊界限制 (Physical Constraints - JSON):</label>
-        <textarea id="constraints" rows="3">{
-  "max_grip_force": 12,
-  "min_grip_force": 4,
-  "max_approach_velocity": 0.5,
-  "gripper_friction_coefficient": 0.2
-}</textarea>
+        <textarea id="constraints" rows="3">{"max_grip_force": 12, "min_grip_force": 4, "max_approach_velocity": 0.5, "gripper_friction_coefficient": 0.2}</textarea>
         
         <label>原始行為樹 (Original BT - JSON):</label>
-        <textarea id="originalBt" rows="5">{
-  "Action": "Sequence",
-  "Nodes": [
-    {"Node": "GoTo", "Location": "refrigerator_shelf"},
-    {"Node": "ApproachObject", "Target": "glass_bottle", "approach_speed": 0.8},
-    {"Node": "CloseGripper", "grip_force": 10}
-  ]
-}</textarea>
+        <textarea id="originalBt" rows="4">{"Action": "Sequence", "Nodes": [{"Node": "GoTo", "Location": "refrigerator_shelf"}, {"Node": "ApproachObject", "Target": "glass_bottle", "approach_speed": 0.8}, {"Node": "CloseGripper", "grip_force": 10}]}</textarea>
         
+        <label>上一輪模擬結果 (Historical Results - 供 GDO 策略迭代，選填):</label>
+        <div class="file-group">
+            <input type="file" id="historicalInput" accept=".json" onchange="loadHistorical(event)">
+        </div>
+        <textarea id="historicalText" rows="3" placeholder="請上傳或直接貼上上一輪萃取後的 Isaac 評估結果 (JSON 格式)"></textarea>
+
         <button id="startBtn" onclick="runPipeline()">啟動 GDO 演化管線</button>
     </div>
 
@@ -78,7 +75,7 @@
         </div>
 
         <div class="step-container" id="step3">
-            <strong>[Step 3] 探索策略與 Isaac 測試矩陣 (Simulation Cases)</strong>
+            <strong>[Step 3] 探索策略與測試矩陣 (Simulation Cases & Criteria)</strong>
             <pre id="outPlan">等待執行...</pre>
         </div>
 
@@ -101,9 +98,11 @@
                 <pre id="outGov">...</pre>
             </div>
             <div>
-                <strong>Isaac 物理模擬 API (保留介面)</strong>
+                <strong>Isaac 物理模擬 API</strong>
+                <input type="password" id="isaacApiKey" placeholder="輸入 Isaac Endpoint / API Key (測試可留白)">
                 <button id="isaacBtn" disabled onclick="sendToIsaac()">傳送測試矩陣至 Isaac 叢集</button>
                 <pre id="outIsaac">等待候選策略與測試案例傳入...</pre>
+                <button id="dlIsaacBtn" class="btn-secondary" disabled onclick="exportIsaacResult()">下載模擬結果 (JSON)</button>
             </div>
             <div>
                 <strong>全域不可變證據鏈 (Flight Recorder)</strong>
@@ -115,12 +114,10 @@
 </div>
 
 <script>
-    // 飛行紀錄儀狀態與全域變數
     let flightRecorder = [];
     let currentTraceToken = "";
     let systemState = {};
-    
-    // Token 用量統計
+    let mockIsaacResponse = null;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
@@ -141,13 +138,22 @@
     function updateTokenUsage(inputCount, outputCount) {
         totalInputTokens += (inputCount || 0);
         totalOutputTokens += (outputCount || 0);
-        // Gemini 1.5/2.5 Flash 預估定價: 輸入 $0.075 / 1M, 輸出 $0.30 / 1M
         const cost = ((totalInputTokens / 1000000) * 0.075) + ((totalOutputTokens / 1000000) * 0.30);
         document.getElementById('tokenUsageDisplay').innerText = 
             `輸入 Token: ${totalInputTokens} | 輸出 Token: ${totalOutputTokens} | 預估成本: $${cost.toFixed(5)} USD`;
     }
 
-    // 呼叫 Gemini API 核心函數
+    function loadHistorical(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('historicalText').value = e.target.result;
+            };
+            reader.readAsText(file);
+        }
+    }
+
     async function callGemini(apiKey, prompt, imageBase64 = null) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         let parts = [{ text: prompt }];
@@ -155,9 +161,7 @@
         if (imageBase64) {
             const mimeType = imageBase64.split(';')[0].split(':')[1];
             const base64Data = imageBase64.split(',')[1];
-            parts.push({
-                inlineData: { mimeType: mimeType, data: base64Data }
-            });
+            parts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
         }
 
         const response = await fetch(url, {
@@ -169,24 +173,15 @@
         if (!response.ok) throw new Error("API 請求失敗：" + response.statusText);
         
         const data = await response.json();
-        
-        // 擷取並更新 Token 用量
-        if (data.usageMetadata) {
-            updateTokenUsage(data.usageMetadata.promptTokenCount, data.usageMetadata.candidatesTokenCount);
-        }
+        if (data.usageMetadata) updateTokenUsage(data.usageMetadata.promptTokenCount, data.usageMetadata.candidatesTokenCount);
 
         let rawText = data.candidates[0].content.parts[0].text;
-        
-        // 使用正則表達式強制擷取最外層的 { } 區塊，避免自然語言前綴導致 JSON.parse 失敗
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("無法從 LLM 回應中提取有效的 JSON 結構。\n原始回應：" + rawText);
-        }
+        if (!jsonMatch) throw new Error("無法提取有效 JSON。\n原始回應：" + rawText);
         
         return JSON.parse(jsonMatch[0]);
     }
 
-    // 圖片轉 Base64
     function getBase64(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -196,7 +191,6 @@
         });
     }
 
-    // 主執行管線
     async function runPipeline() {
         const apiKey = document.getElementById('apiKey').value;
         const imageFile = document.getElementById('imageInput').files[0];
@@ -212,6 +206,7 @@
         flightRecorder = [];
         totalInputTokens = 0;
         totalOutputTokens = 0;
+        mockIsaacResponse = null;
         updateTokenUsage(0, 0);
 
         try {
@@ -220,10 +215,11 @@
             const goal = document.getElementById('semanticGoal').value;
             const constraints = JSON.parse(document.getElementById('constraints').value);
             const origBt = JSON.parse(document.getElementById('originalBt').value);
+            const historicalData = document.getElementById('historicalText').value.trim();
 
-            appendEvent("session_start", "system", { goal, constraints, original_bt: origBt });
+            appendEvent("session_start", "system", { goal, constraints, original_bt: origBt, historical_data: historicalData });
 
-            // Step 1: VLM
+            // Step 1
             document.getElementById('outVlm').innerText = "VLM 視覺推論中...";
             const vlmPrompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及人類語意建立結構化環境狀態模型。要求輸出JSON包含: environment_entities, target_object(pose與orientation盡量轉為數值, observable_properties), spatial_relations, robot_context, uncertainties(name, estimated_value, confidence)。\n人類補充語意: ${context}`;
             const envState = await callGemini(apiKey, vlmPrompt, imgBase64);
@@ -231,7 +227,7 @@
             appendEvent("vlm_bootstrap", "vlm_agent", envState);
             systemState.envState = envState;
 
-            // Step 2: GDO Understanding
+            // Step 2
             document.getElementById('outUnderstanding').innerText = "GDO 失效模式推導中...";
             const step2Prompt = `你是高階 GDO Agent。請依據 Goal: ${goal}, Constraints: ${JSON.stringify(constraints)}, Environment State (含不確定性): ${JSON.stringify(envState)}, Original BT: ${JSON.stringify(origBt)}，推導失效模式。請嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
             const gdoUnderstand = await callGemini(apiKey, step2Prompt);
@@ -239,7 +235,7 @@
             appendEvent("gdo_semantic_model", "gdo_agent", gdoUnderstand);
             systemState.semanticModel = gdoUnderstand;
 
-            // Step 3: Exploration Plan
+            // Step 3
             document.getElementById('outPlan').innerText = "GDO 實驗矩陣設計中...";
             const step3Prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(gdoUnderstand)} 與 VLM Uncertainties: ${JSON.stringify(envState.uncertainties)}。針對 VLM 信心度較低的數值變數，設計對應的邊界測試情境。嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
             const plan = await callGemini(apiKey, step3Prompt);
@@ -247,16 +243,20 @@
             appendEvent("gdo_exploration_plan", "gdo_agent", plan);
             systemState.plan = plan;
 
-            // Step 4: Candidate BT
+            // Step 4
             document.getElementById('outCandidate').innerText = "GDO 候選策略重構中...";
-            const step4Prompt = `你是 GDO Agent。請依據:\n1. Original BT: ${JSON.stringify(origBt)}\n2. Semantic Model: ${JSON.stringify(gdoUnderstand)}\n3. Exploration Plan: ${JSON.stringify(plan)}\n自主修改原始 BT。所有修改必須由失效模式與計畫推導。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
+            let histInstruction = "";
+            if (historicalData) {
+                histInstruction = `\n4. Historical Simulation Results: ${historicalData}\n請針對上一輪的評估結果與失敗原因，進行策略修正（例如加入容錯節點或調整參數邊界）。`;
+            }
+            const step4Prompt = `你是 GDO Agent。請依據:\n1. Original BT: ${JSON.stringify(origBt)}\n2. Semantic Model: ${JSON.stringify(gdoUnderstand)}\n3. Exploration Plan: ${JSON.stringify(plan)}${histInstruction}\n自主修改原始 BT。所有修改必須由失效模式、計畫與歷史結果推導。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
             const candidateResponse = await callGemini(apiKey, step4Prompt);
             const candidateBt = { Action: candidateResponse.Action, Nodes: candidateResponse.Nodes };
             document.getElementById('outCandidate').innerText = JSON.stringify(candidateResponse, null, 2);
             appendEvent("gdo_candidate_bt", "gdo_agent", candidateResponse);
             systemState.candidateBt = candidateBt;
 
-            // Step 5: Governance
+            // Step 5
             runGovernance(candidateBt, constraints);
 
         } catch (error) {
@@ -267,7 +267,6 @@
         }
     }
 
-    // 決定性治理邏輯
     function runGovernance(bt, constraints) {
         const maxForce = constraints.max_grip_force || 999;
         const forbidden = ["DeleteObject", "ForceDrop", "Explode"];
@@ -304,14 +303,48 @@
         }
     }
 
-    // Isaac API 介面
     function sendToIsaac() {
+        const isaacKey = document.getElementById('isaacApiKey').value;
         document.getElementById('isaacBtn').disabled = true;
-        document.getElementById('outIsaac').innerText = "已向 Isaac API (Endpoint: /api/v1/simulate) 發送 Candidate BT 與 Simulation Cases。\n等待物理沙箱運算完成...";
-        appendEvent("isaac_api_request", "system_interface", { target: "isaac_sim_cluster", cases: systemState.plan.simulation_cases });
+        document.getElementById('outIsaac').innerText = "發送連線至 Isaac 叢集...\n執行模擬環境建置與測試案例窮舉中...";
+        
+        appendEvent("isaac_api_request", "system_interface", { 
+            api_key_provided: !!isaacKey,
+            cases: systemState.plan.simulation_cases 
+        });
+
+        // Mock 延遲，模擬物理運算時間，並依據 Step 3 的 evaluation_criteria 給予評分
+        setTimeout(() => {
+            mockIsaacResponse = {
+                status: "success",
+                simulated_cases_count: systemState.plan.simulation_cases ? systemState.plan.simulation_cases.length : 0,
+                results: [
+                    {
+                        case_id: "CASE_MOCK_01",
+                        physical_data: { object_dropped: false, max_force_applied: 11.5, task_time_sec: 4.2 },
+                        fitness_evaluation: {
+                            score: 92.5,
+                            criteria_met: ["task_success", "grip_force_optimized"],
+                            notes: "符合 Step 3 評估標準，抓取穩定無滑脫。"
+                        }
+                    }
+                ]
+            };
+            document.getElementById('outIsaac').innerText = "模擬完成！\n" + JSON.stringify(mockIsaacResponse, null, 2);
+            document.getElementById('dlIsaacBtn').disabled = false;
+            appendEvent("isaac_api_response", "isaac_cluster", mockIsaacResponse);
+        }, 2000);
     }
 
-    // 匯出飛行紀錄儀
+    function exportIsaacResult() {
+        if (!mockIsaacResponse) return;
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(mockIsaacResponse, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", `isaac_results_${currentTraceToken}.json`);
+        dlAnchorElem.click();
+    }
+
     function exportFlightRecorder() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(flightRecorder, null, 2));
         const dlAnchorElem = document.createElement('a');
