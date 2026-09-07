@@ -3,24 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO Agentic Framework - Physical AI (HITL Dual-Logging Edition)</title>
+    <title>GDO 目標自優化代理系統 - WesmartAI</title>
     <style>
-        :root { --primary: #0056b3; --bg: #f4f6f8; --panel-bg: #ffffff; --border: #e1e4e8; --success: #28a745; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        :root { 
+            --primary: #004494; 
+            --sidebar-bg: #003399; 
+            --bg: #f4f6f8; 
+            --panel-bg: #ffffff; 
+            --border: #e1e4e8; 
+            --success: #28a745; 
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; display: flex; min-height: 100vh; }
+        
+        /* 側邊欄設計 */
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); color: white; padding: 30px 20px; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar h1 { margin: 0; font-size: 1.8rem; letter-spacing: 1px; }
+        .sidebar h2 { margin: 5px 0 20px 0; font-size: 1rem; font-weight: normal; color: #a9c2f0; }
+        .sidebar h3 { font-size: 1.1rem; border-top: 1px solid #4d79ff; padding-top: 20px; margin-top: 10px; line-height: 1.4; }
+        .sidebar .btn-demo { background-color: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px; text-align: center; border-radius: 4px; margin-top: auto; font-weight: bold; cursor: pointer; }
+        .sidebar .btn-demo:hover { background-color: rgba(255,255,255,0.2); }
+
+        /* 主內容區設計 */
+        .main-content { flex-grow: 1; padding: 20px; overflow-y: auto; width: calc(100% - 300px); }
+        .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1600px; margin: 0 auto; }
+        
         .panel { background: var(--panel-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid var(--border); }
         .full-width { grid-column: span 2; }
-        h2 { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
+        h2.panel-title { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
+        
         .metrics { font-size: 0.85rem; font-weight: normal; color: #555; background: #e9ecef; padding: 4px 8px; border-radius: 4px; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
         input[type="text"], input[type="password"], input[type="file"], textarea.input-box { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
         button { background-color: var(--primary); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 15px; width: 100%; transition: 0.3s; }
-        button:hover { background-color: #004494; }
+        button:hover { background-color: #002244; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
         button.btn-continue { background-color: var(--success); margin-top: 10px; }
         button.btn-continue:hover { background-color: #218838; }
         .btn-secondary { background-color: #6c757d; margin-top: 10px; }
         .btn-secondary:hover { background-color: #5a6268; }
+        
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
         .status-allow { background-color: #d4edda; color: #155724; }
         .status-reject { background-color: #f8d7da; color: #721c24; }
@@ -28,107 +49,128 @@
         .step-container { margin-bottom: 20px; border-left: 4px solid var(--primary); padding-left: 10px; }
         .step-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 5px; }
         .auto-run-label { font-size: 0.85rem; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 5px; color: #555; }
-        textarea.json-editor { width: 100%; height: 200px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; border: none; font-family: monospace; font-size: 0.85rem; box-sizing: border-box; resize: vertical; margin-top: 5px; }
+        textarea.json-editor { width: 100%; height: 250px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; border: none; font-family: monospace; font-size: 0.85rem; box-sizing: border-box; resize: vertical; margin-top: 5px; }
         textarea.json-editor:focus { outline: 1px solid var(--primary); }
+
+        /* 自適應 RWD */
+        @media (max-width: 1024px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; padding: 15px; display: block; box-sizing: border-box; }
+            .sidebar h3 { margin-bottom: 10px; }
+            .sidebar .btn-demo { display: inline-block; width: auto; margin-top: 10px; }
+            .main-content { width: 100%; padding: 10px; }
+            .container { grid-template-columns: 1fr; }
+            .full-width { grid-column: span 1; }
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <!-- 左側：輸入與配置層 -->
-    <div class="panel">
-        <h2>1. 系統配置與環境輸入</h2>
-        <label>Gemini API Key:</label>
-        <input type="password" id="apiKey" placeholder="輸入 API Key">
-        
-        <label>現場視覺影像 (Visual Input):</label>
-        <input type="file" id="imageInput" accept="image/*">
-        
-        <label>語意上下文 (Semantic Context - 選填):</label>
-        <input type="text" id="semanticContext" value="瓶身表面佈滿冷凝水，表面摩擦力極低。物件目前呈 25 度傾斜並倚靠金屬側壁，導致右側機械夾爪的進入空間受限。">
-        
-        <label>人類語意目標 (Semantic Goal):</label>
-        <textarea id="semanticGoal" class="input-box" rows="3">在低摩擦力與傾斜姿態的物理干擾下，完成玻璃瓶的穩定抓取與提起。要求夾取過程具備容錯機制，絕對禁止物件滑脫，且嚴禁因夾取力道過大導致玻璃破裂。</textarea>
-        
-        <label>物理邊界限制 (Constraints - JSON):</label>
-        <textarea id="constraints" class="input-box" rows="3">{"max_grip_force": 12, "min_grip_force": 4, "max_approach_velocity": 0.5, "gripper_friction_coefficient": 0.2}</textarea>
-        
-        <label>原始行為樹 (Original BT - JSON):</label>
-        <textarea id="originalBt" class="input-box" rows="4">{"Action": "Sequence", "Nodes": [{"Node": "GoTo", "Location": "refrigerator_shelf"}, {"Node": "ApproachObject", "Target": "glass_bottle", "approach_speed": 0.8}, {"Node": "CloseGripper", "grip_force": 10}]}</textarea>
-        
-        <label>上一輪模擬結果 (Historical Results - 選填):</label>
-        <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-            <input type="file" id="historicalInput" accept=".json" onchange="loadHistorical(event)">
-        </div>
-        <textarea id="historicalText" class="input-box" rows="2" placeholder="可上傳或貼上上一輪萃取後的 Isaac 評估結果"></textarea>
+<!-- 品牌側邊欄 -->
+<div class="sidebar">
+    <h1>WesmartAI</h1>
+    <h2>可信智慧整合有限公司</h2>
+    <h3>GDO 目標自優化代理系統<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Governance-Driven Optimization)</span></h3>
+    <div class="btn-demo">系統狀態: 待機中</div>
+</div>
 
-        <button id="startBtn" onclick="startPipeline()">啟動 GDO 演化管線 (Step 1)</button>
-    </div>
-
-    <!-- 右側：Agentic 執行管線 (支援 HITL 雙軌記錄) -->
-    <div class="panel">
-        <h2>2. Agentic 執行管線 (HITL 雙軌編輯模式)</h2>
-        
-        <div class="step-container" id="step1">
-            <div class="step-header">
-                <span>[Step 1] VLM 環境建模</span>
-                <label class="auto-run-label"><input type="checkbox" id="autoStep2" checked> 自動進入 Step 2</label>
+<div class="main-content">
+    <div class="container">
+        <!-- 左側：輸入與配置層 -->
+        <div class="panel">
+            <h2 class="panel-title">1. 系統配置與環境輸入</h2>
+            <label>Gemini API Key:</label>
+            <input type="password" id="apiKey" placeholder="輸入 API Key">
+            
+            <label>現場視覺影像 (Visual Input):</label>
+            <input type="file" id="imageInput" accept="image/*">
+            
+            <label>語意上下文 (Semantic Context - 選填):</label>
+            <input type="text" id="semanticContext" value="瓶身表面佈滿冷凝水，表面摩擦力極低。物件目前呈 25 度傾斜並倚靠金屬側壁，導致右側機械夾爪的進入空間受限。">
+            
+            <label>人類語意目標 (Semantic Goal):</label>
+            <textarea id="semanticGoal" class="input-box" rows="3">在低摩擦力與傾斜姿態的物理干擾下，完成玻璃瓶的穩定抓取與提起。要求夾取過程具備容錯機制，絕對禁止物件滑脫，且嚴禁因夾取力道過大導致玻璃破裂。</textarea>
+            
+            <label>物理邊界限制 (Constraints - JSON):</label>
+            <textarea id="constraints" class="input-box" rows="3">{"max_grip_force": 12, "min_grip_force": 4, "max_approach_velocity": 0.5, "gripper_friction_coefficient": 0.2}</textarea>
+            
+            <label>原始行為樹 (Original BT - JSON):</label>
+            <textarea id="originalBt" class="input-box" rows="4">{"Action": "Sequence", "Nodes": [{"Node": "GoTo", "Location": "refrigerator_shelf"}, {"Node": "ApproachObject", "Target": "glass_bottle", "approach_speed": 0.8}, {"Node": "CloseGripper", "grip_force": 10}]}</textarea>
+            
+            <label>上一輪模擬結果 (Historical Results - 選填):</label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                <input type="file" id="historicalInput" accept=".json" onchange="loadHistorical(event)">
             </div>
-            <textarea id="outVlm" class="json-editor" placeholder="等待執行，完成後可在此直接編輯 JSON..."></textarea>
-            <button id="btnCont1" class="btn-continue" style="display:none;" onclick="runStep2()">確認修改並執行 Step 2</button>
+            <textarea id="historicalText" class="input-box" rows="2" placeholder="可上傳或貼上上一輪萃取後的 Isaac 評估結果"></textarea>
+
+            <button id="startBtn" onclick="startPipeline()">啟動 GDO 演化管線 (Step 1)</button>
         </div>
 
-        <div class="step-container" id="step2">
-            <div class="step-header">
-                <span>[Step 2] GDO 語意與失效分析</span>
-                <label class="auto-run-label"><input type="checkbox" id="autoStep3" checked> 自動進入 Step 3</label>
+        <!-- 右側：Agentic 執行管線 (支援 HITL 雙軌記錄) -->
+        <div class="panel">
+            <h2 class="panel-title">2. Agentic 執行管線 (HITL 編輯模式)</h2>
+            
+            <div class="step-container" id="step1">
+                <div class="step-header">
+                    <span>[Step 1] VLM 環境建模</span>
+                    <label class="auto-run-label"><input type="checkbox" id="autoStep2" checked> 自動進入 Step 2</label>
+                </div>
+                <textarea id="outVlm" class="json-editor" placeholder="等待執行..."></textarea>
+                <button id="btnCont1" class="btn-continue" style="display:none;" onclick="runStep2()">確認修改並執行 Step 2</button>
             </div>
-            <textarea id="outUnderstanding" class="json-editor" placeholder="等待執行，完成後可在此直接編輯 JSON..."></textarea>
-            <button id="btnCont2" class="btn-continue" style="display:none;" onclick="runStep3()">確認修改並執行 Step 3</button>
+
+            <div class="step-container" id="step2">
+                <div class="step-header">
+                    <span>[Step 2] GDO 語意與失效分析</span>
+                    <label class="auto-run-label"><input type="checkbox" id="autoStep3" checked> 自動進入 Step 3</label>
+                </div>
+                <textarea id="outUnderstanding" class="json-editor" placeholder="等待執行..."></textarea>
+                <button id="btnCont2" class="btn-continue" style="display:none;" onclick="runStep3()">確認修改並執行 Step 3</button>
+            </div>
+
+            <div class="step-container" id="step3">
+                <div class="step-header">
+                    <span>[Step 3] 探索策略與測試矩陣</span>
+                    <label class="auto-run-label"><input type="checkbox" id="autoStep4" checked> 自動進入 Step 4</label>
+                </div>
+                <textarea id="outPlan" class="json-editor" placeholder="等待執行..."></textarea>
+                <button id="btnCont3" class="btn-continue" style="display:none;" onclick="runStep4()">確認修改並執行 Step 4</button>
+            </div>
+
+            <div class="step-container" id="step4">
+                <div class="step-header">
+                    <span>[Step 4] 候選策略產出 (Candidate BT)</span>
+                    <label class="auto-run-label"><input type="checkbox" id="autoStep5" checked> 自動進入治理裁決</label>
+                </div>
+                <textarea id="outCandidate" class="json-editor" placeholder="等待執行..."></textarea>
+                <button id="btnCont4" class="btn-continue" style="display:none;" onclick="runStep5()">確認策略並進入治理裁決</button>
+            </div>
         </div>
 
-        <div class="step-container" id="step3">
-            <div class="step-header">
-                <span>[Step 3] 探索策略與測試矩陣</span>
-                <label class="auto-run-label"><input type="checkbox" id="autoStep4" checked> 自動進入 Step 4</label>
-            </div>
-            <textarea id="outPlan" class="json-editor" placeholder="等待執行，完成後可在此直接編輯 JSON..."></textarea>
-            <button id="btnCont3" class="btn-continue" style="display:none;" onclick="runStep4()">確認修改並執行 Step 4</button>
-        </div>
-
-        <div class="step-container" id="step4">
-            <div class="step-header">
-                <span>[Step 4] 候選策略產出 (Candidate BT)</span>
-                <label class="auto-run-label"><input type="checkbox" id="autoStep5" checked> 自動進入治理裁決</label>
-            </div>
-            <textarea id="outCandidate" class="json-editor" placeholder="等待執行，完成後可在此直接編輯 JSON..."></textarea>
-            <button id="btnCont4" class="btn-continue" style="display:none;" onclick="runStep5()">確認策略並進入治理裁決</button>
-        </div>
-    </div>
-
-    <!-- 底部：治理、模擬與證據 -->
-    <div class="panel full-width">
-        <h2>
-            3. 治理、物理模擬與證據鏈
-            <span class="metrics" id="tokenUsageDisplay">輸入: 0 | 輸出: 0 | 成本: $0.00000 USD</span>
-        </h2>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-            <div>
-                <strong>輸出治理裁決 (Agenverdict)</strong>
-                <p id="govStatus">等待裁決...</p>
-                <div id="outGov" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">...</div>
-            </div>
-            <div>
-                <strong>Isaac 物理模擬 API</strong>
-                <input type="password" id="isaacApiKey" placeholder="Isaac Endpoint / API Key">
-                <button id="isaacBtn" disabled onclick="sendToIsaac()">傳送測試矩陣至 Isaac 叢集</button>
-                <div id="outIsaac" style="margin-top: 10px; font-family: monospace; font-size: 0.85rem; color: #555;">等待傳入...</div>
-                <button id="dlIsaacBtn" class="btn-secondary" style="display:none;" onclick="exportIsaacResult()">下載模擬結果</button>
-            </div>
-            <div>
-                <strong>全域不可變證據鏈 (Flight Recorder)</strong>
-                <p>Trace Token: <span id="traceTokenLabel" style="font-family: monospace;">未生成</span></p>
-                <button id="exportBtn" disabled onclick="exportFlightRecorder()">下載 Trace Evidence (JSON)</button>
+        <!-- 底部：治理、模擬與證據 -->
+        <div class="panel full-width">
+            <h2 class="panel-title">
+                3. 治理、物理模擬與證據鏈
+                <span class="metrics" id="tokenUsageDisplay">輸入: 0 | 輸出: 0 | 成本: $0.00000 USD</span>
+            </h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div>
+                    <strong>輸出治理裁決 (Agenverdict)</strong>
+                    <p id="govStatus">等待裁決...</p>
+                    <div id="outGov" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">...</div>
+                </div>
+                <div>
+                    <strong>Isaac 物理模擬 API</strong>
+                    <input type="password" id="isaacApiKey" placeholder="Isaac Endpoint / API Key">
+                    <button id="isaacBtn" disabled onclick="sendToIsaac()">傳送測試矩陣至 Isaac</button>
+                    <div id="outIsaac" style="margin-top: 10px; font-family: monospace; font-size: 0.85rem; color: #555;">等待傳入...</div>
+                    <button id="dlIsaacBtn" class="btn-secondary" style="display:none;" onclick="exportIsaacResult()">下載模擬結果</button>
+                </div>
+                <div>
+                    <strong>全域不可變證據鏈 (Hash-linked)</strong>
+                    <p>Trace Token: <br><span id="traceTokenLabel" style="font-family: monospace; font-size: 0.85rem;">未生成</span></p>
+                    <button id="exportBtn" disabled onclick="exportFlightRecorder()">下載 Trace Evidence (JSON)</button>
+                </div>
             </div>
         </div>
     </div>
@@ -137,21 +179,47 @@
 <script>
     let flightRecorder = [];
     let currentTraceToken = "";
-    let systemState = { imageBase64: null };
+    let previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
+    let systemState = { imageBase64: null, rawOutputs: {} };
     let mockIsaacResponse = null;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
+    // 密碼學 Hash 函數 (SHA-256)
+    async function computeSHA256(message) {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     function generateUUID() { return 'tt_' + Math.random().toString(36).substring(2, 14); }
 
-    function appendEvent(eventType, actor, payload) {
-        flightRecorder.push({
+    // 寫入不可變證據鏈 (Hash-chained)
+    async function appendEvent(eventType, actor, payload) {
+        const timestamp = new Date().toISOString();
+        const coreData = {
             trace_token: currentTraceToken,
-            timestamp: new Date().toISOString(),
+            timestamp: timestamp,
             event_type: eventType,
             actor: actor,
-            payload: payload
-        });
+            payload: payload,
+            previous_hash: previousHash
+        };
+        const currentHash = await computeSHA256(JSON.stringify(coreData));
+        const eventRecord = { ...coreData, current_hash: currentHash };
+        flightRecorder.push(eventRecord);
+        previousHash = currentHash;
+    }
+
+    // 差異化紀錄邏輯
+    async function logDiffEvent(stepName, finalObj) {
+        const rawObj = systemState.rawOutputs[stepName];
+        if (JSON.stringify(rawObj) === JSON.stringify(finalObj)) {
+            await appendEvent(`${stepName}_final`, "human_confirmed", finalObj);
+        } else {
+            await appendEvent(`${stepName}_final`, "human_override", { original: rawObj, modified: finalObj, changed: true });
+        }
     }
 
     function updateTokenUsage(inputCount, outputCount) {
@@ -172,10 +240,9 @@
 
     function parseEditorJSON(textareaId, stepName) {
         const text = document.getElementById(textareaId).value;
-        try {
-            return JSON.parse(text);
-        } catch (e) {
-            alert(`【格式錯誤】${stepName} 編輯區塊中的 JSON 格式不合法，請檢查標點符號或引號。\n\n詳細錯誤: ${e.message}`);
+        try { return JSON.parse(text); } 
+        catch (e) {
+            alert(`【格式錯誤】${stepName} 編輯區塊中的 JSON 格式不合法。\n詳細錯誤: ${e.message}`);
             throw e;
         }
     }
@@ -219,7 +286,8 @@
         document.getElementById('startBtn').disabled = true;
         currentTraceToken = generateUUID();
         document.getElementById('traceTokenLabel').innerText = currentTraceToken;
-        flightRecorder = []; totalInputTokens = 0; totalOutputTokens = 0;
+        flightRecorder = []; previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
+        totalInputTokens = 0; totalOutputTokens = 0; systemState.rawOutputs = {};
         updateTokenUsage(0, 0);
 
         try {
@@ -229,7 +297,7 @@
             systemState.constraints = parseEditorJSON('constraints', '物理邊界限制');
             systemState.origBt = parseEditorJSON('originalBt', '原始行為樹');
             
-            appendEvent("session_start", "system", { goal: systemState.goal, constraints: systemState.constraints, original_bt: systemState.origBt });
+            await appendEvent("session_start", "system", { goal: systemState.goal, constraints: systemState.constraints, original_bt: systemState.origBt });
             await runStep1();
         } catch (e) {
             document.getElementById('startBtn').disabled = false;
@@ -244,9 +312,8 @@
         
         try {
             const envStateRaw = await callGemini(systemState.apiKey, prompt, systemState.imageBase64);
-            
-            // 記錄 AI 原始生成版 (Raw Version)
-            appendEvent("vlm_bootstrap_raw", "vlm_agent", envStateRaw);
+            systemState.rawOutputs['vlm_bootstrap'] = envStateRaw;
+            await appendEvent("vlm_bootstrap_raw", "vlm_agent", envStateRaw);
             
             setEditorValue('outVlm', envStateRaw);
             
@@ -264,17 +331,15 @@
         document.getElementById('btnCont2').style.display = 'none';
         
         try {
-            // 讀取人類確認/覆寫後的 Step 1 版本並記錄
             systemState.envState = parseEditorJSON('outVlm', 'Step 1');
-            appendEvent("vlm_bootstrap_final", "human_engineer_override", systemState.envState);
+            await logDiffEvent("vlm_bootstrap", systemState.envState);
 
             document.getElementById('outUnderstanding').value = "GDO 失效模式推導中...";
             const prompt = `你是高階 GDO Agent。請依據 Goal: ${systemState.goal}, Constraints: ${JSON.stringify(systemState.constraints)}, Environment State: ${JSON.stringify(systemState.envState)}, Original BT: ${JSON.stringify(systemState.origBt)}，推導失效模式。請嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
             
             const gdoUnderstandRaw = await callGemini(systemState.apiKey, prompt);
-            
-            // 記錄 AI 原始生成版 (Raw Version)
-            appendEvent("gdo_semantic_model_raw", "gdo_agent", gdoUnderstandRaw);
+            systemState.rawOutputs['gdo_semantic_model'] = gdoUnderstandRaw;
+            await appendEvent("gdo_semantic_model_raw", "gdo_agent", gdoUnderstandRaw);
 
             setEditorValue('outUnderstanding', gdoUnderstandRaw);
             
@@ -292,17 +357,15 @@
         document.getElementById('btnCont3').style.display = 'none';
         
         try {
-            // 讀取人類確認/覆寫後的 Step 2 版本並記錄
             systemState.semanticModel = parseEditorJSON('outUnderstanding', 'Step 2');
-            appendEvent("gdo_semantic_model_final", "human_engineer_override", systemState.semanticModel);
+            await logDiffEvent("gdo_semantic_model", systemState.semanticModel);
 
             document.getElementById('outPlan').value = "GDO 實驗矩陣設計中...";
             const prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(systemState.semanticModel)} 與 VLM Uncertainties: ${JSON.stringify(systemState.envState.uncertainties)}。針對 VLM 信心度較低的數值變數，設計邊界測試情境。嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
             
             const planRaw = await callGemini(systemState.apiKey, prompt);
-            
-            // 記錄 AI 原始生成版 (Raw Version)
-            appendEvent("gdo_exploration_plan_raw", "gdo_agent", planRaw);
+            systemState.rawOutputs['gdo_exploration_plan'] = planRaw;
+            await appendEvent("gdo_exploration_plan_raw", "gdo_agent", planRaw);
 
             setEditorValue('outPlan', planRaw);
             
@@ -320,9 +383,8 @@
         document.getElementById('btnCont4').style.display = 'none';
         
         try {
-            // 讀取人類確認/覆寫後的 Step 3 版本並記錄
             systemState.plan = parseEditorJSON('outPlan', 'Step 3');
-            appendEvent("gdo_exploration_plan_final", "human_engineer_override", systemState.plan);
+            await logDiffEvent("gdo_exploration_plan", systemState.plan);
 
             document.getElementById('outCandidate').value = "GDO 候選策略重構中...";
             const historicalData = document.getElementById('historicalText').value.trim();
@@ -331,9 +393,8 @@
             const prompt = `你是 GDO Agent。請依據:\n1. Original BT: ${JSON.stringify(systemState.origBt)}\n2. Semantic Model: ${JSON.stringify(systemState.semanticModel)}\n3. Exploration Plan: ${JSON.stringify(systemState.plan)}${histInstruction}\n自主修改原始 BT。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
             
             const candidateResponseRaw = await callGemini(systemState.apiKey, prompt);
-            
-            // 記錄 AI 原始生成版 (Raw Version)
-            appendEvent("gdo_candidate_bt_raw", "gdo_agent", candidateResponseRaw);
+            systemState.rawOutputs['gdo_candidate_bt'] = candidateResponseRaw;
+            await appendEvent("gdo_candidate_bt_raw", "gdo_agent", candidateResponseRaw);
 
             setEditorValue('outCandidate', candidateResponseRaw);
             
@@ -346,23 +407,21 @@
         } catch (e) { alert("Step 4 錯誤: " + e.message); document.getElementById('btnCont3').style.display = 'block'; }
     }
 
-    function runStep5() {
+    async function runStep5() {
         document.getElementById('btnCont4').style.display = 'none';
         try {
-            // 讀取人類確認/覆寫後的 Step 4 版本並記錄
             const candidateDataFinal = parseEditorJSON('outCandidate', 'Step 4');
-            appendEvent("gdo_candidate_bt_final", "human_engineer_override", candidateDataFinal);
+            await logDiffEvent("gdo_candidate_bt", candidateDataFinal);
 
             const candidateBt = { Action: candidateDataFinal.Action, Nodes: candidateDataFinal.Nodes };
-            
-            runGovernance(candidateBt, systemState.constraints);
+            await runGovernance(candidateBt, systemState.constraints);
             document.getElementById('startBtn').disabled = false;
         } catch (e) {
             document.getElementById('btnCont4').style.display = 'block';
         }
     }
 
-    function runGovernance(bt, constraints) {
+    async function runGovernance(bt, constraints) {
         const maxForce = constraints.max_grip_force || 999;
         const forbidden = ["DeleteObject", "ForceDrop", "Explode"];
         let isValid = true;
@@ -389,7 +448,7 @@
         statusEl.className = isValid ? "status-badge status-allow" : "status-badge status-reject";
         statusEl.innerText = isValid ? "ALLOW" : "REJECT";
         document.getElementById('outGov').innerText = msg;
-        appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg });
+        await appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg });
 
         if (isValid) {
             document.getElementById('isaacBtn').disabled = false;
@@ -397,19 +456,19 @@
         }
     }
 
-    function sendToIsaac() {
+    async function sendToIsaac() {
         document.getElementById('isaacBtn').disabled = true;
         document.getElementById('outIsaac').innerText = "連線至 Isaac 叢集中...\n等待評估結果 (Mock)...";
-        appendEvent("isaac_api_request", "system_interface", { cases: systemState.plan.simulation_cases });
+        await appendEvent("isaac_api_request", "system_interface", { cases: systemState.plan.simulation_cases });
 
-        setTimeout(() => {
+        setTimeout(async () => {
             mockIsaacResponse = {
                 status: "success",
                 results: [{ case_id: "CASE_MOCK_01", physical_data: { object_dropped: false, max_force_applied: 11.5 }, fitness_evaluation: { score: 92.5, criteria_met: ["task_success"] } }]
             };
             document.getElementById('outIsaac').innerText = "模擬完成！請點擊下載。";
-            document.getElementById('dlIsaacBtn').style.display = 'block';
-            appendEvent("isaac_api_response", "isaac_cluster", mockIsaacResponse);
+            document.getElementById('dlIsaacBtn').style.display = 'inline-block';
+            await appendEvent("isaac_api_response", "isaac_cluster", mockIsaacResponse);
         }, 2000);
     }
 
