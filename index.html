@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 目標自優化代理系統 - WesmartAI</title>
+    <title>GDO 目標自優化代理系統 v3 - WesmartAI</title>
     <style>
         :root { 
             --primary: #004494; 
@@ -12,18 +12,18 @@
             --panel-bg: #ffffff; 
             --border: #e1e4e8; 
             --success: #28a745; 
+            --warning: #b8860b;
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; display: flex; min-height: 100vh; }
         
-        /* 側邊欄設計 */
         .sidebar { width: 260px; background-color: var(--sidebar-bg); color: white; padding: 30px 20px; display: flex; flex-direction: column; flex-shrink: 0; }
         .sidebar h1 { margin: 0; font-size: 1.8rem; letter-spacing: 1px; }
         .sidebar h2 { margin: 5px 0 20px 0; font-size: 1rem; font-weight: normal; color: #a9c2f0; }
         .sidebar h3 { font-size: 1.1rem; border-top: 1px solid #4d79ff; padding-top: 20px; margin-top: 10px; line-height: 1.4; }
         .sidebar .btn-demo { background-color: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px; text-align: center; border-radius: 4px; margin-top: auto; font-weight: bold; cursor: pointer; }
         .sidebar .btn-demo:hover { background-color: rgba(255,255,255,0.2); }
+        .sidebar .changelog { font-size: 0.75rem; color: #a9c2f0; margin-top: 15px; line-height: 1.6; }
 
-        /* 主內容區設計 */
         .main-content { flex-grow: 1; padding: 20px; overflow-y: auto; width: calc(100% - 300px); }
         .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1600px; margin: 0 auto; }
         
@@ -33,7 +33,7 @@
         
         .metrics { font-size: 0.85rem; font-weight: normal; color: #555; background: #e9ecef; padding: 4px 8px; border-radius: 4px; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
-        input[type="text"], input[type="password"], input[type="file"], textarea.input-box { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        input[type="text"], input[type="password"], input[type="file"], input[type="number"], textarea.input-box { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
         button { background-color: var(--primary); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-top: 15px; width: 100%; transition: 0.3s; }
         button:hover { background-color: #002244; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
@@ -45,6 +45,7 @@
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
         .status-allow { background-color: #d4edda; color: #155724; }
         .status-reject { background-color: #f8d7da; color: #721c24; }
+        .status-warning { background-color: #fff3cd; color: #856404; }
         
         .step-container { margin-bottom: 20px; border-left: 4px solid var(--primary); padding-left: 10px; }
         .step-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 5px; }
@@ -52,7 +53,14 @@
         textarea.json-editor { width: 100%; height: 250px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; border: none; font-family: monospace; font-size: 0.85rem; box-sizing: border-box; resize: vertical; margin-top: 5px; }
         textarea.json-editor:focus { outline: 1px solid var(--primary); }
 
-        /* 自適應 RWD */
+        .coverage-box { margin-top: 8px; padding: 8px 10px; border-radius: 4px; font-size: 0.8rem; }
+        .coverage-ok { background: #d4edda; color: #155724; }
+        .coverage-warn { background: #fff3cd; color: #856404; }
+
+        .iter-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+        .iter-row input[type="number"] { width: 70px; margin-top: 0; }
+        .iter-status { font-size: 0.8rem; color: #555; margin-top: 8px; min-height: 1.2em; }
+
         @media (max-width: 1024px) {
             body { flex-direction: column; }
             .sidebar { width: 100%; padding: 15px; display: block; box-sizing: border-box; }
@@ -66,12 +74,25 @@
 </head>
 <body>
 
-<!-- 品牌側邊欄 -->
 <div class="sidebar">
     <h1>WesmartAI</h1>
     <h2>可信智慧整合有限公司</h2>
-    <h3>GDO 目標自優化代理系統<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Governance-Driven Optimization)</span></h3>
+    <h3>GDO 目標自優化代理系統 v3<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Governance-Driven Optimization)</span></h3>
     <div class="btn-demo">系統狀態: 待機中</div>
+    <div class="changelog">
+        v3 變更 (P0/P1/P2):<br>
+        · Governance 加入 type/range/整數/未知欄位檢查<br>
+        · 失效模式檢查更名為 Traceability，明示非語意驗證<br>
+        · UI 明確區分「治理=可執行」與「模擬=物理有效」<br>
+        <br>
+        v2 變更:<br>
+        · 治理閘改白名單 + SPEC 全欄位檢查<br>
+        · BT schema 加入 Fallback/Condition/Retry<br>
+        · 新增失效模式覆蓋檢查(非阻擋，僅警示)<br>
+        · 新增自動迭代模式(分數門檻/輪數)<br>
+        · VLM pose/uncertainty 改為區間表示<br>
+        · Isaac 對接仍為 mock，未變更
+    </div>
 </div>
 
 <div class="main-content">
@@ -93,6 +114,7 @@
             
             <label>物理邊界限制 (Constraints - JSON):</label>
             <textarea id="constraints" class="input-box" rows="3">{"max_grip_force": 12, "min_grip_force": 4, "max_approach_velocity": 0.5, "gripper_friction_coefficient": 0.2}</textarea>
+            <div style="font-size:0.75rem; color:#856404; margin-top:4px;">註: gripper_friction_coefficient 目前僅傳入 LLM prompt 作為推理參考，治理閘尚未有基於摩擦係數的力學驗證公式，這是已知未涵蓋項目，非本次修改範圍。</div>
             
             <label>原始行為樹 (Original BT - JSON):</label>
             <textarea id="originalBt" class="input-box" rows="4">{"Action": "Sequence", "Nodes": [{"Node": "GoTo", "Location": "refrigerator_shelf"}, {"Node": "ApproachObject", "Target": "glass_bottle", "approach_speed": 0.8}, {"Node": "CloseGripper", "grip_force": 10}]}</textarea>
@@ -101,12 +123,12 @@
             <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
                 <input type="file" id="historicalInput" accept=".json" onchange="loadHistorical(event)">
             </div>
-            <textarea id="historicalText" class="input-box" rows="2" placeholder="可上傳或貼上上一輪萃取後的 Isaac 評估結果"></textarea>
+            <textarea id="historicalText" class="input-box" rows="2" placeholder="可上傳或貼上上一輪萃取後的 Isaac 評估結果；啟用自動迭代時此欄位會被系統自動填入"></textarea>
 
             <button id="startBtn" onclick="startPipeline()">啟動 GDO 演化管線 (Step 1)</button>
         </div>
 
-        <!-- 右側：Agentic 執行管線 (支援 HITL 雙軌記錄) -->
+        <!-- 右側：Agentic 執行管線 -->
         <div class="panel">
             <h2 class="panel-title">2. Agentic 執行管線 (HITL 編輯模式)</h2>
             
@@ -143,6 +165,7 @@
                     <label class="auto-run-label"><input type="checkbox" id="autoStep5" checked> 自動進入治理裁決</label>
                 </div>
                 <textarea id="outCandidate" class="json-editor" placeholder="等待執行..."></textarea>
+                <div id="coverageBox" class="coverage-box" style="display:none;"></div>
                 <button id="btnCont4" class="btn-continue" style="display:none;" onclick="runStep5()">確認策略並進入治理裁決</button>
             </div>
         </div>
@@ -153,18 +176,30 @@
                 3. 治理、物理模擬與證據鏈
                 <span class="metrics" id="tokenUsageDisplay">輸入: 0 | 輸出: 0 | 成本: $0.00000 USD</span>
             </h2>
+            <p style="font-size:0.8rem; color:#555; margin-top:-8px; margin-bottom:15px;">治理裁決 = 是否符合可執行規格 (executable)；物理模擬 = 是否物理有效 (physically effective)。兩者是各自獨立的證明層，治理 ALLOW 不代表物理安全，需以模擬/實測結果為準。</p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 <div>
                     <strong>輸出治理裁決 (Agenverdict)</strong>
                     <p id="govStatus">等待裁決...</p>
                     <div id="outGov" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">...</div>
+                    <p style="font-size:0.75rem; color:#856404; margin-top:6px;">此裁決僅代表符合目前定義的可執行規格，不等於物理安全證明。</p>
                 </div>
                 <div>
-                    <strong>Isaac 物理模擬 API</strong>
+                    <strong>Isaac 物理模擬 API (Mock)</strong>
+                    <p style="font-size:0.75rem; color:#856404; margin:4px 0 0 0;">此區塊才是物理有效性的驗證來源；目前為 Mock 回傳，實際物理安全判斷需接入真實模擬結果。</p>
                     <input type="password" id="isaacApiKey" placeholder="Isaac Endpoint / API Key">
                     <button id="isaacBtn" disabled onclick="sendToIsaac()">傳送測試矩陣至 Isaac</button>
                     <div id="outIsaac" style="margin-top: 10px; font-family: monospace; font-size: 0.85rem; color: #555;">等待傳入...</div>
                     <button id="dlIsaacBtn" class="btn-secondary" style="display:none;" onclick="exportIsaacResult()">下載模擬結果</button>
+
+                    <label style="margin-top:15px;"><input type="checkbox" id="autoIterate"> 啟用自動迭代 (分數未達門檻自動重跑 Step4)</label>
+                    <div class="iter-row">
+                        <label style="margin-top:0; font-weight:normal;">最大輪數</label>
+                        <input type="number" id="maxRounds" value="3" min="1" max="10">
+                        <label style="margin-top:0; font-weight:normal;">分數門檻</label>
+                        <input type="number" id="scoreThreshold" value="85" min="0" max="100">
+                    </div>
+                    <div id="iterationStatus" class="iter-status"></div>
                 </div>
                 <div>
                     <strong>全域不可變證據鏈 (Hash-linked)</strong>
@@ -184,8 +219,186 @@
     let mockIsaacResponse = null;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let iterationState = { round: 0, maxRounds: 3, threshold: 85, autoMode: false };
 
-    // 密碼學 Hash 函數 (SHA-256)
+    // ===================== 治理閘白名單 SPEC (v2 修改 1 → v3 P0 強化) =====================
+    // 複合節點型別：必須有 Nodes 子陣列
+    const COMPOSITE_TYPES = ['Sequence', 'Fallback', 'Parallel'];
+
+    // 結構性欄位（非業務欄位），未知欄位檢查時排除在外
+    const STRUCTURAL_FIELDS = ['Node', 'Action', 'Nodes', 'Child', 'OnTrue', 'OnFalse', 'addressed_failure_modes'];
+
+    // 葉節點 / 特殊節點型別 SPEC。
+    // 每個 field 定義: type('string'|'number'|'integer'), required(bool),
+    // min/max(數值範圍), constraintMin/constraintMax(對照使用者輸入的 constraints 物件欄位名)
+    const NODE_SPECS = {
+        GoTo: {
+            fields: { Location: { type: 'string', required: true } }
+        },
+        ApproachObject: {
+            fields: {
+                Target: { type: 'string', required: true },
+                approach_speed: { type: 'number', required: true, min: 0, constraintMax: 'max_approach_velocity' }
+            }
+        },
+        CloseGripper: {
+            fields: {
+                grip_force: { type: 'number', required: true, min: 0, constraintMin: 'min_grip_force', constraintMax: 'max_grip_force' }
+            }
+        },
+        OpenGripper: { fields: {} },
+        IncreaseGripForce: {
+            fields: { step: { type: 'number', required: true, min: 0, max: 20 } }
+        },
+        Wait: {
+            fields: { duration_ms: { type: 'integer', required: true, min: 0, max: 600000 } }
+        },
+        Retry: {
+            fields: { max_attempts: { type: 'integer', required: true, min: 1, max: 20 } }
+        },
+        Condition: {
+            fields: { check: { type: 'string', required: true } }
+        }
+    };
+
+    // 保留明確禁止清單作為 defense-in-depth（即使誤放入白名單也擋）
+    const HARD_FORBIDDEN = ["DeleteObject", "ForceDrop", "Explode"];
+
+    // v3 P0: 嚴格型別/範圍檢查，不依賴 JS 隱式轉型
+    // (原本 "" <= 12 會被轉成 0 <= 12 而誤判通過，這裡直接用 typeof 擋掉非 number 型別)
+    function validateField(value, spec, fieldName, nodeType) {
+        if (value === undefined) {
+            return spec.required ? `節點 [${nodeType}] 缺少必要欄位 ${fieldName}` : null;
+        }
+        if (spec.type === 'string') {
+            if (typeof value !== 'string' || value.trim() === '') {
+                return `[${nodeType}].${fieldName} 應為非空字串，實際為 ${JSON.stringify(value)} (型別: ${typeof value})`;
+            }
+            return null;
+        }
+        if (spec.type === 'number' || spec.type === 'integer') {
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return `[${nodeType}].${fieldName} 應為有限數值，實際為 ${JSON.stringify(value)} (型別: ${typeof value})`;
+            }
+            if (spec.type === 'integer' && !Number.isInteger(value)) {
+                return `[${nodeType}].${fieldName} 應為整數，實際為 ${value}`;
+            }
+            if (spec.min !== undefined && value < spec.min) {
+                return `[${nodeType}].${fieldName}(${value}) 低於允許下限 ${spec.min}`;
+            }
+            if (spec.max !== undefined && value > spec.max) {
+                return `[${nodeType}].${fieldName}(${value}) 超過允許上限 ${spec.max}`;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    function inspectNode(node, constraints) {
+        const type = node.Node || node.Action;
+        if (!type) return 'REJECT: 節點缺少 Node/Action 型別欄位';
+        if (HARD_FORBIDDEN.includes(type)) return `REJECT: 包含明確禁止動作 [${type}]`;
+
+        if (COMPOSITE_TYPES.includes(type)) {
+            if (!Array.isArray(node.Nodes)) return `REJECT: 複合節點 [${type}] 缺少 Nodes 陣列`;
+            for (const child of node.Nodes) {
+                const r = inspectNode(child, constraints);
+                if (r !== 'ALLOW') return r;
+            }
+            return 'ALLOW';
+        }
+
+        const spec = NODE_SPECS[type];
+        if (!spec) return `REJECT: 未知節點類型 [${type}]，不在白名單內`;
+
+        // v3 P0: 未知欄位政策 — 不在 SPEC 內、也不是結構性欄位的 key 一律拒絕
+        const allowedKeys = new Set([...Object.keys(spec.fields), ...STRUCTURAL_FIELDS]);
+        const unknownKeys = Object.keys(node).filter(k => !allowedKeys.has(k));
+        if (unknownKeys.length > 0) return `REJECT: 節點 [${type}] 含未定義欄位: ${unknownKeys.join(', ')}`;
+
+        // v3 P0: 型別/範圍嚴格檢查
+        for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
+            const err = validateField(node[fieldName], fieldSpec, fieldName, type);
+            if (err) return `REJECT: ${err}`;
+        }
+
+        // constraints 對照檢查（使用者輸入的物理邊界，例如 max_grip_force）
+        for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
+            if (node[fieldName] === undefined) continue;
+            if (fieldSpec.constraintMax && constraints[fieldSpec.constraintMax] !== undefined && node[fieldName] > constraints[fieldSpec.constraintMax]) {
+                return `REJECT: [${type}].${fieldName}(${node[fieldName]}) 超過 constraints.${fieldSpec.constraintMax}(${constraints[fieldSpec.constraintMax]})`;
+            }
+            if (fieldSpec.constraintMin && constraints[fieldSpec.constraintMin] !== undefined && node[fieldName] < constraints[fieldSpec.constraintMin]) {
+                return `REJECT: [${type}].${fieldName}(${node[fieldName]}) 低於 constraints.${fieldSpec.constraintMin}(${constraints[fieldSpec.constraintMin]})，可能無法有效夾持`;
+            }
+        }
+
+        if (type === 'Retry') {
+            if (!node.Child) return `REJECT: 節點 [Retry] 缺少必要欄位 Child`;
+            const r = inspectNode(node.Child, constraints);
+            if (r !== 'ALLOW') return r;
+        }
+        if (type === 'Condition') {
+            for (const branch of ['OnTrue', 'OnFalse']) {
+                if (node[branch]) {
+                    const r = inspectNode(node[branch], constraints);
+                    if (r !== 'ALLOW') return r;
+                }
+            }
+        }
+        return 'ALLOW';
+    }
+
+    function runGovernanceCheck(bt, constraints) {
+        const rootType = bt.Action || bt.Node;
+        if (!rootType) return 'REJECT: 缺少根節點 Action/Node 型別';
+        if (!Array.isArray(bt.Nodes)) return 'REJECT: 缺少 Nodes 陣列';
+        if (!COMPOSITE_TYPES.includes(rootType)) return `REJECT: 根節點型別 [${rootType}] 必須是複合節點 (${COMPOSITE_TYPES.join('/')})`;
+        for (const child of bt.Nodes) {
+            const r = inspectNode(child, constraints);
+            if (r !== 'ALLOW') return r;
+        }
+        return 'ALLOW: 白名單、型別/範圍、必要欄位、未知欄位與 constraints 全欄位檢查通過（僅代表符合可執行規格，不代表物理安全，物理有效性需以下方 Isaac 模擬結果為準）';
+    }
+
+    // ===================== 失效模式可追溯性檢查 (v2 修改 3 → v3 P1 更名並限縮語意) =====================
+    // 重要: 這只是 traceability check——只能證明「這個 id 有被某節點標註」，
+    // 不能證明該節點的邏輯真的有效處理了這個失效模式（例如一個 Wait 節點可以宣稱處理 object_slippage，
+    // 這裡不會抓到）。語意正確性需要人工複查，或後續由 Isaac 模擬結果反證。
+    function checkFailureModeTraceability(failureModes, candidateBt) {
+        const covered = new Set();
+        function walk(node) {
+            if (!node || typeof node !== 'object') return;
+            (node.addressed_failure_modes || []).forEach(id => covered.add(id));
+            if (Array.isArray(node.Nodes)) node.Nodes.forEach(walk);
+            if (node.Child) walk(node.Child);
+            if (node.OnTrue) walk(node.OnTrue);
+            if (node.OnFalse) walk(node.OnFalse);
+        }
+        (candidateBt.Nodes || []).forEach(walk);
+
+        const ids = (failureModes || []).map(f => (typeof f === 'string') ? f : (f.id || f.name || JSON.stringify(f)));
+        const untraced = ids.filter(id => !covered.has(id));
+        return { total: ids.length, untraced };
+    }
+
+    function renderTraceabilityBox(trace) {
+        const box = document.getElementById('coverageBox');
+        if (trace.total === 0) {
+            box.style.display = 'none';
+            return;
+        }
+        box.style.display = 'block';
+        if (trace.untraced.length === 0) {
+            box.className = 'coverage-box coverage-ok';
+            box.innerText = `失效模式可追溯性檢查: 全部 ${trace.total} 項都有節點標註 addressed_failure_modes。註: 這只確認「有標註」，不代表該節點語意上真的有效處理了失效模式，仍需人工複查或以模擬結果反證。`;
+        } else {
+            box.className = 'coverage-box coverage-warn';
+            box.innerText = `失效模式可追溯性檢查(警示，非阻擋): ${trace.untraced.length}/${trace.total} 項未見任何節點標註 → [${trace.untraced.join(', ')}]。候選 BT 裡完全沒有節點聲稱處理這些失效模式，建議退回或人工修正。`;
+        }
+    }
+
+    // ===================== 以下為原始基礎設施，邏輯未變更 =====================
     async function computeSHA256(message) {
         const msgBuffer = new TextEncoder().encode(message);
         const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -195,7 +408,6 @@
 
     function generateUUID() { return 'tt_' + Math.random().toString(36).substring(2, 14); }
 
-    // 寫入不可變證據鏈 (Hash-chained)
     async function appendEvent(eventType, actor, payload) {
         const timestamp = new Date().toISOString();
         const coreData = {
@@ -212,7 +424,6 @@
         previousHash = currentHash;
     }
 
-    // 差異化紀錄邏輯
     async function logDiffEvent(stepName, finalObj) {
         const rawObj = systemState.rawOutputs[stepName];
         if (JSON.stringify(rawObj) === JSON.stringify(finalObj)) {
@@ -289,6 +500,14 @@
         flightRecorder = []; previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
         totalInputTokens = 0; totalOutputTokens = 0; systemState.rawOutputs = {};
         updateTokenUsage(0, 0);
+        document.getElementById('coverageBox').style.display = 'none';
+        document.getElementById('iterationStatus').innerText = '';
+
+        // 修改 4: 讀取自動迭代設定，每次新 pipeline 重置輪數
+        iterationState.autoMode = document.getElementById('autoIterate').checked;
+        iterationState.maxRounds = parseInt(document.getElementById('maxRounds').value, 10) || 3;
+        iterationState.threshold = parseFloat(document.getElementById('scoreThreshold').value) || 85;
+        iterationState.round = 0;
 
         try {
             systemState.apiKey = apiKey;
@@ -297,7 +516,7 @@
             systemState.constraints = parseEditorJSON('constraints', '物理邊界限制');
             systemState.origBt = parseEditorJSON('originalBt', '原始行為樹');
             
-            await appendEvent("session_start", "system", { goal: systemState.goal, constraints: systemState.constraints, original_bt: systemState.origBt });
+            await appendEvent("session_start", "system", { goal: systemState.goal, constraints: systemState.constraints, original_bt: systemState.origBt, iteration_config: iterationState });
             await runStep1();
         } catch (e) {
             document.getElementById('startBtn').disabled = false;
@@ -308,7 +527,15 @@
         document.getElementById('outVlm').value = "VLM 視覺推論中...";
         document.getElementById('btnCont1').style.display = 'none';
         const context = document.getElementById('semanticContext').value;
-        const prompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及人類語意建立結構化環境狀態模型。要求輸出JSON包含: environment_entities, target_object(pose與orientation盡量轉為數值, observable_properties), spatial_relations, robot_context, uncertainties(name, estimated_value, confidence)。\n人類補充語意: ${context}`;
+        // 修改 5: pose/orientation 與 uncertainties 改要求區間表示，而非單一數值猜測
+        const prompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及人類語意建立結構化環境狀態模型。
+要求輸出 JSON 包含:
+- environment_entities
+- target_object: pose 與 orientation 一律以 {estimate: 數值, range: [最小值, 最大值]} 物件表示，不要只給單一數值；並包含 observable_properties
+- spatial_relations
+- robot_context
+- uncertainties: 陣列，每個元素為 {name, estimated_value, range: [最小值, 最大值], confidence(0~1)}，confidence 越低則 range 應越寬
+人類補充語意: ${context}`;
         
         try {
             const envStateRaw = await callGemini(systemState.apiKey, prompt, systemState.imageBase64);
@@ -335,7 +562,9 @@
             await logDiffEvent("vlm_bootstrap", systemState.envState);
 
             document.getElementById('outUnderstanding').value = "GDO 失效模式推導中...";
-            const prompt = `你是高階 GDO Agent。請依據 Goal: ${systemState.goal}, Constraints: ${JSON.stringify(systemState.constraints)}, Environment State: ${JSON.stringify(systemState.envState)}, Original BT: ${JSON.stringify(systemState.origBt)}，推導失效模式。請嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes。絕不預先給定答案。`;
+            // 修改 3 的前置：要求每個 failure mode 有明確 id，供後續覆蓋檢查比對
+            const prompt = `你是高階 GDO Agent。請依據 Goal: ${systemState.goal}, Constraints: ${JSON.stringify(systemState.constraints)}, Environment State: ${JSON.stringify(systemState.envState)}, Original BT: ${JSON.stringify(systemState.origBt)}，推導失效模式。
+請嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes(陣列，每個元素必須包含 id(簡短英文小寫底線命名), description, severity)。絕不預先給定答案。`;
             
             const gdoUnderstandRaw = await callGemini(systemState.apiKey, prompt);
             systemState.rawOutputs['gdo_semantic_model'] = gdoUnderstandRaw;
@@ -361,7 +590,9 @@
             await logDiffEvent("gdo_semantic_model", systemState.semanticModel);
 
             document.getElementById('outPlan').value = "GDO 實驗矩陣設計中...";
-            const prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(systemState.semanticModel)} 與 VLM Uncertainties: ${JSON.stringify(systemState.envState.uncertainties)}。針對 VLM 信心度較低的數值變數，設計邊界測試情境。嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
+            const prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(systemState.semanticModel)} 與 VLM Uncertainties: ${JSON.stringify(systemState.envState.uncertainties)}。
+針對每個 uncertainty 的 range 邊界（下界與上界，而不只是 confidence 分數），設計邊界測試情境，覆蓋 range 的極值組合。
+嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases(case_id, state, parameters)。`;
             
             const planRaw = await callGemini(systemState.apiKey, prompt);
             systemState.rawOutputs['gdo_exploration_plan'] = planRaw;
@@ -381,6 +612,7 @@
     async function runStep4() {
         document.getElementById('btnCont3').style.display = 'none';
         document.getElementById('btnCont4').style.display = 'none';
+        document.getElementById('coverageBox').style.display = 'none';
         
         try {
             systemState.plan = parseEditorJSON('outPlan', 'Step 3');
@@ -390,13 +622,31 @@
             const historicalData = document.getElementById('historicalText').value.trim();
             let histInstruction = historicalData ? `\n4. Historical Results: ${historicalData}\n請針對歷史失敗原因進行修正。` : "";
             
-            const prompt = `你是 GDO Agent。請依據:\n1. Original BT: ${JSON.stringify(systemState.origBt)}\n2. Semantic Model: ${JSON.stringify(systemState.semanticModel)}\n3. Exploration Plan: ${JSON.stringify(systemState.plan)}${histInstruction}\n自主修改原始 BT。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
+            // 修改 2: BT schema 擴充為可含 Fallback/Condition/Retry，且每個節點/子樹要標註 addressed_failure_modes
+            const prompt = `你是 GDO Agent。請依據:
+1. Original BT: ${JSON.stringify(systemState.origBt)}
+2. Semantic Model (含 potential_failure_modes，每項有 id): ${JSON.stringify(systemState.semanticModel)}
+3. Exploration Plan: ${JSON.stringify(systemState.plan)}${histInstruction}
+
+自主修改原始 BT。可用節點型別:
+- 複合節點(需要 Nodes 子陣列): Sequence, Fallback, Parallel
+- 葉節點: GoTo{Location}, ApproachObject{Target,approach_speed}, CloseGripper{grip_force}, OpenGripper{}, IncreaseGripForce{step}, Wait{duration_ms}
+- 特殊節點: Retry{Child, max_attempts}(Child 為單一子節點), Condition{check, OnTrue, OnFalse}(OnTrue/OnFalse 為單一子節點，選填)
+
+要求: 針對 Step 2 列出的每一個 potential_failure_modes，至少要有一個節點或子樹加上欄位 addressed_failure_modes: [對應的 id]，說明這個節點如何處理該失效模式。不要只用扁平 Sequence 加固定數值；滑脫、力道不足等風險應該用 Fallback/Condition/Retry 結構表達，而非單一固定 grip_force。
+
+嚴格輸出 JSON: modification_rationale, Action(必須是 Sequence/Fallback/Parallel 其中之一), Nodes。`;
             
             const candidateResponseRaw = await callGemini(systemState.apiKey, prompt);
             systemState.rawOutputs['gdo_candidate_bt'] = candidateResponseRaw;
             await appendEvent("gdo_candidate_bt_raw", "gdo_agent", candidateResponseRaw);
 
             setEditorValue('outCandidate', candidateResponseRaw);
+
+            // v3 P1: 產出後立即算失效模式可追溯性，顯示警示(不阻擋，非語意驗證)
+            const traceability = checkFailureModeTraceability(systemState.semanticModel.potential_failure_modes, candidateResponseRaw);
+            renderTraceabilityBox(traceability);
+            await appendEvent("failure_mode_traceability_check", "system", traceability);
             
             if (document.getElementById('autoStep5').checked) {
                 runStep5();
@@ -413,6 +663,10 @@
             const candidateDataFinal = parseEditorJSON('outCandidate', 'Step 4');
             await logDiffEvent("gdo_candidate_bt", candidateDataFinal);
 
+            // 若使用者在 HITL 編輯階段動過內容，可追溯性要重算一次，避免顯示舊資料
+            const traceability = checkFailureModeTraceability(systemState.semanticModel.potential_failure_modes, candidateDataFinal);
+            renderTraceabilityBox(traceability);
+
             const candidateBt = { Action: candidateDataFinal.Action, Nodes: candidateDataFinal.Nodes };
             await runGovernance(candidateBt, systemState.constraints);
             document.getElementById('startBtn').disabled = false;
@@ -421,45 +675,35 @@
         }
     }
 
+    // 修改 1: 使用新的白名單式 runGovernanceCheck
     async function runGovernance(bt, constraints) {
-        const maxForce = constraints.max_grip_force || 999;
-        const forbidden = ["DeleteObject", "ForceDrop", "Explode"];
-        let isValid = true;
-        let msg = "ALLOW: 邊界與結構檢查通過";
-
-        function inspect(nodes) {
-            for (let node of nodes) {
-                if (forbidden.includes(node.Node || node.Action)) return `REJECT: 包含危險動作 [${node.Node || node.Action}]`;
-                if (node.grip_force !== undefined && node.grip_force > maxForce) return `REJECT: grip_force 超過極限 ${maxForce}`;
-                if (node.Nodes && !inspect(node.Nodes).startsWith("ALLOW")) return "REJECT: 子節點違規";
-                if (node.Children && !inspect(node.Children).startsWith("ALLOW")) return "REJECT: 子節點違規";
-            }
-            return "ALLOW";
-        }
-
-        if (!bt.Action || !bt.Nodes) {
-            isValid = false; msg = "REJECT: 缺少 Action 或 Nodes";
-        } else {
-            const res = inspect(bt.Nodes);
-            if (res !== "ALLOW") { isValid = false; msg = res; }
-        }
+        const msg = runGovernanceCheck(bt, constraints);
+        const isValid = msg.startsWith('ALLOW');
 
         const statusEl = document.getElementById('govStatus');
         statusEl.className = isValid ? "status-badge status-allow" : "status-badge status-reject";
         statusEl.innerText = isValid ? "ALLOW" : "REJECT";
         document.getElementById('outGov').innerText = msg;
-        await appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg });
+        await appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg, checked_constraints: constraints });
 
         if (isValid) {
             document.getElementById('isaacBtn').disabled = false;
             document.getElementById('exportBtn').disabled = false;
+            // 修改 4: 治理通過後，若啟用自動迭代，自動送 Isaac 並視分數決定是否重跑
+            if (iterationState.autoMode) {
+                await sendToIsaac();
+            }
+        } else {
+            document.getElementById('iterationStatus').innerText = iterationState.autoMode
+                ? `第 ${iterationState.round + 1} 輪候選被治理閘拒絕，自動迭代已停止，請人工檢視。`
+                : '';
         }
     }
 
     async function sendToIsaac() {
         document.getElementById('isaacBtn').disabled = true;
         document.getElementById('outIsaac').innerText = "連線至 Isaac 叢集中...\n等待評估結果 (Mock)...";
-        await appendEvent("isaac_api_request", "system_interface", { cases: systemState.plan.simulation_cases });
+        await appendEvent("isaac_api_request", "system_interface", { cases: systemState.plan.simulation_cases, round: iterationState.round + 1 });
 
         setTimeout(async () => {
             mockIsaacResponse = {
@@ -469,6 +713,28 @@
             document.getElementById('outIsaac').innerText = "模擬完成！請點擊下載。";
             document.getElementById('dlIsaacBtn').style.display = 'inline-block';
             await appendEvent("isaac_api_response", "isaac_cluster", mockIsaacResponse);
+
+            // 修改 4: 自動迭代邏輯 —— 分數未達門檻且未超過最大輪數，自動帶入結果重跑 Step4
+            if (iterationState.autoMode) {
+                const score = mockIsaacResponse.results[0]?.fitness_evaluation?.score ?? 0;
+                iterationState.round += 1;
+                const statusEl = document.getElementById('iterationStatus');
+
+                if (score >= iterationState.threshold) {
+                    statusEl.innerText = `第 ${iterationState.round} 輪分數 ${score} 已達門檻 ${iterationState.threshold}，自動迭代結束。`;
+                    await appendEvent("auto_iteration_stopped", "system", { reason: "threshold_met", round: iterationState.round, score });
+                    document.getElementById('startBtn').disabled = false;
+                } else if (iterationState.round >= iterationState.maxRounds) {
+                    statusEl.innerText = `已達最大輪數 ${iterationState.maxRounds}，最終分數 ${score} 未達門檻 ${iterationState.threshold}，停止並交由人工判斷。`;
+                    await appendEvent("auto_iteration_stopped", "system", { reason: "max_rounds_reached", round: iterationState.round, score });
+                    document.getElementById('startBtn').disabled = false;
+                } else {
+                    statusEl.innerText = `第 ${iterationState.round} 輪分數 ${score} 未達門檻 ${iterationState.threshold}，自動帶入結果並重跑 Step 4 (第 ${iterationState.round + 1} 輪)...`;
+                    document.getElementById('historicalText').value = JSON.stringify(mockIsaacResponse, null, 2);
+                    await appendEvent("auto_iteration_continue", "system", { round: iterationState.round, score, next_round: iterationState.round + 1 });
+                    runStep4();
+                }
+            }
         }, 2000);
     }
 
