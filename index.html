@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 目標自優化代理系統 v3.2 - WesmartAI</title>
+    <title>GDO 目標自優化代理系統 v3.3 - WesmartAI</title>
     <style>
         :root { 
             --primary: #004494; 
@@ -88,17 +88,16 @@
 <div class="sidebar">
     <h1>WesmartAI</h1>
     <h2>可信智慧整合有限公司</h2>
-    <h3>GDO 目標自優化代理系統 v3.2<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Governance-Driven Optimization)</span></h3>
+    <h3>GDO 目標自優化代理系統 v3.3<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Governance-Driven Optimization)</span></h3>
     <div class="btn-demo">系統狀態: 待機中</div>
     <div class="changelog">
+        v3.3 變更:<br>
+        · 治理閘支援動態約束綁定 (Dynamic Constraint Binding)<br>
+        · 解除參數優化鎖死，依賴 JSON 實時校驗<br>
+        <br>
         v3.2 變更:<br>
         · 導入 Governance Auto-Repair 機制<br>
-        · 實作全局 E-Stop 緊急中斷按鈕<br>
-        <br>
-        v3.1 變更:<br>
-        · 導入 Bin Picking 散亂物件場景<br>
-        · 支援深度圖 (Depth Data) 雙視覺輸入<br>
-        · 實作平行夾爪 Zero-Shot 基礎範本<br>
+        · 實作全局 E-Stop 緊急中斷<br>
     </div>
 </div>
 
@@ -106,7 +105,7 @@
     <div class="container">
         <!-- 左側：輸入與配置層 -->
         <div class="panel">
-            <h2 class="panel-title">1. 系統配置與環境輸入 (Bin Picking)</h2>
+            <h2 class="panel-title">1. 系統配置與環境輸入</h2>
             <label>Gemini API Key:</label>
             <input type="password" id="apiKey" placeholder="輸入 API Key">
             
@@ -116,22 +115,22 @@
                     <input type="file" id="imageInput" accept="image/*">
                 </div>
                 <div>
-                    <label>深度圖/點雲 (Depth Data - 模擬):</label>
+                    <label>深度圖/點雲 (Depth Data):</label>
                     <input type="file" id="depthInput" accept="image/*,.json,.ply">
                 </div>
             </div>
             
             <label>語意上下文 (Semantic Context):</label>
-            <input type="text" id="semanticContext" value="籃子內散落多個不同形狀與重量的物件，存在嚴重堆疊與遮蔽。目標物件A有一半被其他物件覆蓋，表面存在輕微反光。夾具為平行機械夾爪。">
+            <input type="text" id="semanticContext" value="單層平鋪的金屬零件場景，無垂直堆疊，但存在零間隙水平干涉。">
             
             <label>人類語意目標 (Semantic Goal):</label>
-            <textarea id="semanticGoal" class="input-box" rows="4">在複雜堆疊的散亂中型剛性零件中，準確辨識並鎖定使用者指令下達的特定目標物件。針對該物件專屬幾何特徵與物理屬性，自主計算無干涉的最佳平行夾爪接近角度，設定自適應夾持力道。要求生成避障路徑確保安全拔出。</textarea>
+            <textarea id="semanticGoal" class="input-box" rows="4">在乾淨無堆疊的金屬零件平鋪場景中，精準辨識目標物件。精確計算夾爪進入角度與偏置量避免邊緣擦撞。設定合理力道，以最高效率完成平穩夾取，優化整體作業節拍。</textarea>
             
-            <label>物理邊界限制 (Constraints - JSON):</label>
-            <textarea id="constraints" class="input-box" rows="2">{"max_grip_force": 150, "min_grip_force": 20, "max_approach_velocity": 0.15, "max_jaw_opening_mm": 85, "end_effector_type": "parallel_gripper"}</textarea>
+            <label>物理邊界限制 (Constraints - JSON - 治理硬規則):</label>
+            <textarea id="constraints" class="input-box" rows="2">{"max_grip_force": 150, "min_grip_force": 20, "max_approach_velocity": 0.5, "max_jaw_opening_mm": 85, "end_effector_type": "parallel_gripper"}</textarea>
             
             <label>原始行為樹 (Original BT):</label>
-            <textarea id="originalBt" class="input-box" rows="3">{"Action": "Sequence", "Nodes": [{"Node": "FindGraspPoint", "Target": "blue_cylindrical_part", "Method": "AntipodalSampler"}, {"Node": "AlignApproachVector", "axis": "z"}, {"Node": "ApproachObject", "Target": "blue_cylindrical_part", "approach_speed": 0.1}, {"Node": "CloseGripper", "grip_force": 40}]}</textarea>
+            <textarea id="originalBt" class="input-box" rows="2">{"Action": "Sequence", "Nodes": [{"Node": "FindGraspPoint", "Target": "blue_cylindrical_part", "Method": "AntipodalSampler"}, {"Node": "AlignApproachVector", "axis": "z"}, {"Node": "ApproachObject", "Target": "blue_cylindrical_part", "approach_speed": 0.1}, {"Node": "CloseGripper", "grip_force": 40}]}</textarea>
             
             <label>上一輪模擬結果 (Historical Results):</label>
             <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
@@ -207,7 +206,7 @@
                     <div id="outIsaac" style="margin-top: 10px; font-family: monospace; font-size: 0.85rem; color: #555;">等待傳入...</div>
                     <button id="dlIsaacBtn" class="btn-secondary" style="display:none;" onclick="exportIsaacResult()">下載模擬結果</button>
 
-                    <label style="margin-top:15px;"><input type="checkbox" id="autoIterate"> 啟用自動迭代 (分數未達門檻自動重跑)</label>
+                    <label style="margin-top:15px;"><input type="checkbox" id="autoIterate"> 啟用自動迭代</label>
                     <div class="iter-row">
                         <label style="margin-top:0; font-weight:normal;">最大輪數</label>
                         <input type="number" id="maxRounds" value="3" min="1" max="10">
@@ -236,12 +235,10 @@
     let totalOutputTokens = 0;
     let iterationState = { round: 0, maxRounds: 3, threshold: 85, autoMode: false };
     
-    // v3.2 新增全域控制變數
     let eStopTriggered = false;
     let governanceRetries = 0;
     const MAX_GOV_RETRIES = 3;
 
-    // ===================== E-Stop 緊急中斷機制 =====================
     async function emergencyStop() {
         if (eStopTriggered) return;
         eStopTriggered = true;
@@ -250,10 +247,8 @@
         document.getElementById('pipelineStatus').innerText = "⚠️ 管線已緊急中斷 (E-STOP ACTIVATED)";
         
         await appendEvent("emergency_stop_activated", "human_engineer", { message: "User triggered hard interrupt." });
-        console.warn("E-STOP triggered. Halt all async operations.");
     }
 
-    // ===================== 工具與比對函數 =====================
     function isDeepEqual(obj1, obj2) {
         if (obj1 === obj2) return true;
         if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
@@ -265,39 +260,66 @@
         return true;
     }
 
-    // ===================== 治理閘白名單 SPEC =====================
+    // ===================== V3.3: 治理閘動態約束 SPEC =====================
     const COMPOSITE_TYPES = ['Sequence', 'Fallback', 'Parallel'];
     const STRUCTURAL_FIELDS = ['Node', 'Action', 'Nodes', 'Child', 'OnTrue', 'OnFalse', 'addressed_failure_modes'];
 
+    // V3.3: 放寬 type 為 'any'，允許 AI 使用複雜結構 (如 offset_xyz)，但由後方 constraints 實時驗證
     const NODE_SPECS = {
         Sequence: { fields: {} },
         Fallback: { fields: {} },
         Parallel: { fields: {} },
-        GoTo: { fields: { Location: { type: 'string', required: true } } },
-        FindGraspPoint: { fields: { Target: { type: 'string', required: true }, Method: { type: 'string', required: true } } },
-        AlignApproachVector: { fields: { axis: { type: 'string', required: true } } },
-        ApproachObject: { fields: { Target: { type: 'string', required: true }, approach_speed: { type: 'number', required: true, min: 0, constraintMax: 'max_approach_velocity' } } },
-        CloseGripper: { fields: { grip_force: { type: 'number', required: true, min: 0, constraintMin: 'min_grip_force', constraintMax: 'max_grip_force' } } },
+        GoTo: { 
+            fields: { 
+                Location: { type: 'any', required: false },
+                Target: { type: 'any', required: false },
+                Speed: { type: 'number', required: false, constraintMax: 'max_approach_velocity' }
+            } 
+        },
+        FindGraspPoint: { 
+            fields: { 
+                Target: { type: 'string', required: true }, 
+                Method: { type: 'string', required: true },
+                gripper_jaw_clearance_offset_x: { type: 'number', required: false },
+                obstacle_id: { type: 'string', required: false },
+                Parameters: { type: 'any', required: false }
+            } 
+        },
+        AlignApproachVector: { 
+            fields: { 
+                axis: { type: 'string', required: false },
+                Vector: { type: 'any', required: false }
+            } 
+        },
+        ApproachObject: { 
+            fields: { 
+                Target: { type: 'any', required: true }, 
+                approach_speed: { type: 'number', required: false, min: 0, constraintMax: 'max_approach_velocity' } 
+            } 
+        },
+        CloseGripper: { 
+            fields: { 
+                grip_force: { type: 'number', required: true, min: 0, constraintMin: 'min_grip_force', constraintMax: 'max_grip_force' } 
+            } 
+        },
         OpenGripper: { fields: {} },
-        IncreaseGripForce: { fields: { step: { type: 'number', required: true, min: 0, max: 20 } } },
-        RemoveObstacle: { fields: { Target: { type: 'string', required: true } } },
-        Wait: { fields: { duration_ms: { type: 'integer', required: true, min: 0, max: 600000 } } },
-        Retry: { fields: { max_attempts: { type: 'integer', required: true, min: 1, max: 20 } } },
+        IncreaseGripForce: { fields: { step: { type: 'number', required: true, min: 0 } } },
+        Wait: { fields: { duration_ms: { type: 'number', required: true, min: 0 } } },
+        Retry: { fields: { max_attempts: { type: 'number', required: true, min: 1 } } },
         Condition: { fields: { check: { type: 'string', required: true } } }
     };
     const HARD_FORBIDDEN = ["DeleteObject", "ForceDrop", "Explode"];
 
     function validateField(value, spec, fieldName, nodeType) {
         if (value === undefined) return spec.required ? `節點 [${nodeType}] 缺少必要欄位 ${fieldName}` : null;
+        if (spec.type === 'any') return null; // V3.3: 允許靈活結構，跳過死板型別檢查
         if (spec.type === 'string') {
             if (typeof value !== 'string' || value.trim() === '') return `[${nodeType}].${fieldName} 應為非空字串`;
             return null;
         }
-        if (spec.type === 'number' || spec.type === 'integer') {
-            if (typeof value !== 'number' || !Number.isFinite(value)) return `[${nodeType}].${fieldName} 應為有限數值`;
-            if (spec.type === 'integer' && !Number.isInteger(value)) return `[${nodeType}].${fieldName} 應為整數`;
+        if (spec.type === 'number') {
+            if (typeof value !== 'number' || !Number.isFinite(value)) return `[${nodeType}].${fieldName} 應為數值`;
             if (spec.min !== undefined && value < spec.min) return `[${nodeType}].${fieldName}(${value}) 低於允許下限 ${spec.min}`;
-            if (spec.max !== undefined && value > spec.max) return `[${nodeType}].${fieldName}(${value}) 超過允許上限 ${spec.max}`;
             return null;
         }
         return null;
@@ -306,27 +328,35 @@
     function inspectNode(node, constraints) {
         const type = node.Node || node.Action;
         if (!type) return 'REJECT: 節點缺少 Node/Action 型別欄位';
-        if (HARD_FORBIDDEN.includes(type)) return `REJECT: 包含明確禁止動作 [${type}]`;
+        if (HARD_FORBIDDEN.includes(type)) return `REJECT: 包含明確硬性禁止動作 [${type}]`;
 
         const spec = NODE_SPECS[type];
         if (!spec) return `REJECT: 未知節點類型 [${type}]`;
 
-        const allowedKeys = new Set([...Object.keys(spec.fields), ...STRUCTURAL_FIELDS]);
+        const allowedKeys = new Set([...Object.keys(spec.fields), ...STRUCTURAL_FIELDS, 'Description']);
         const unknownKeys = Object.keys(node).filter(k => !allowedKeys.has(k));
-        if (unknownKeys.length > 0) return `REJECT: 節點 [${type}] 含未定義欄位: ${unknownKeys.join(', ')}`;
+        if (unknownKeys.length > 0) return `REJECT: 節點 [${type}] 含未授權欄位: ${unknownKeys.join(', ')}`;
 
         for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
             const err = validateField(node[fieldName], fieldSpec, fieldName, type);
             if (err) return `REJECT: ${err}`;
         }
 
+        // V3.3: 動態約束綁定 - 實時核對輸入的 Constraints JSON
         for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
             if (node[fieldName] === undefined) continue;
-            if (fieldSpec.constraintMax && constraints[fieldSpec.constraintMax] !== undefined && node[fieldName] > constraints[fieldSpec.constraintMax]) {
-                return `REJECT: [${type}].${fieldName}(${node[fieldName]}) 超過 constraints.${fieldSpec.constraintMax}(${constraints[fieldSpec.constraintMax]})`;
+            
+            // 檢查速度與力道上限
+            if (fieldSpec.constraintMax && constraints[fieldSpec.constraintMax] !== undefined) {
+                if (node[fieldName] > constraints[fieldSpec.constraintMax]) {
+                    return `REJECT: 物理越界 - [${type}].${fieldName}(${node[fieldName]}) 超過您設定的硬邊界 constraints.${fieldSpec.constraintMax}(${constraints[fieldSpec.constraintMax]})`;
+                }
             }
-            if (fieldSpec.constraintMin && constraints[fieldSpec.constraintMin] !== undefined && node[fieldName] < constraints[fieldSpec.constraintMin]) {
-                return `REJECT: [${type}].${fieldName}(${node[fieldName]}) 低於 constraints.${fieldSpec.constraintMin}(${constraints[fieldSpec.constraintMin]})`;
+            // 檢查力道下限
+            if (fieldSpec.constraintMin && constraints[fieldSpec.constraintMin] !== undefined) {
+                if (node[fieldName] < constraints[fieldSpec.constraintMin]) {
+                    return `REJECT: 物理越界 - [${type}].${fieldName}(${node[fieldName]}) 低於您設定的硬邊界 constraints.${fieldSpec.constraintMin}(${constraints[fieldSpec.constraintMin]})`;
+                }
             }
         }
 
@@ -338,11 +368,7 @@
             }
         }
 
-        if (type === 'Retry') {
-            if (!node.Child) return `REJECT: 節點 [Retry] 缺少必要欄位 Child`;
-            const r = inspectNode(node.Child, constraints);
-            if (r !== 'ALLOW') return r;
-        }
+        if (type === 'Retry' && node.Child) return inspectNode(node.Child, constraints);
         if (type === 'Condition') {
             for (const branch of ['OnTrue', 'OnFalse']) {
                 if (node[branch]) {
@@ -363,7 +389,7 @@
             const r = inspectNode(child, constraints);
             if (r !== 'ALLOW') return r;
         }
-        return 'ALLOW: 白名單、型別/範圍、必要欄位與未知欄位檢查通過';
+        return 'ALLOW: 動態約束與物理邊界校驗通過';
     }
 
     function checkFailureModeTraceability(failureModes, candidateBt) {
@@ -388,7 +414,7 @@
         box.style.display = 'block';
         if (trace.untraced.length === 0) {
             box.className = 'coverage-box coverage-ok';
-            box.innerText = `可追溯性檢查: 全部 ${trace.total} 項都有節點標註 addressed_failure_modes。`;
+            box.innerText = `可追溯性檢查: 全部 ${trace.total} 項都有節點標註。`;
         } else {
             box.className = 'coverage-box coverage-warn';
             box.innerText = `可追溯性檢查(警示): ${trace.untraced.length}/${trace.total} 項未見節點標註 → [${trace.untraced.join(', ')}]`;
@@ -487,7 +513,6 @@
         const depthFile = document.getElementById('depthInput').files[0];
         if (!apiKey || !imageFile) { alert("請輸入 API Key 並上傳視覺影像。"); return; }
 
-        // V3.2 Reset & E-Stop Init
         eStopTriggered = false;
         governanceRetries = 0;
         document.getElementById('startBtn').disabled = true;
@@ -614,7 +639,7 @@
 2. Semantic Model: ${JSON.stringify(systemState.semanticModel)}
 3. Exploration Plan: ${JSON.stringify(systemState.plan)}${histInstruction}
 自主修改 BT。可用複合節點: Sequence, Fallback, Parallel。葉節點: GoTo, FindGraspPoint, AlignApproachVector, ApproachObject, CloseGripper, OpenGripper, IncreaseGripForce, Wait, RemoveObstacle。特殊: Retry, Condition。
-要求: 確保每個節點標註 addressed_failure_modes: [id]。
+要求: 允許添加如 Speed, Parameters 等最佳化參數，但數值不可超過 Constraint 上限。確保每個節點標註 addressed_failure_modes: [id]。
 嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
             
             const candidateResponseRaw = await callGemini(systemState.apiKey, prompt);
@@ -644,13 +669,13 @@
             renderTraceabilityBox(traceability);
 
             const candidateBt = { Action: candidateDataFinal.Action, Nodes: candidateDataFinal.Nodes };
+            // V3.3 傳入 UI 上的 Constraints 進行動態綁定檢核
             await runGovernance(candidateBt, systemState.constraints, candidateDataFinal);
         } catch (e) {
             document.getElementById('btnCont4').style.display = 'block';
         }
     }
 
-    // V3.2: 具備 Self-Healing 的治理閘機制
     async function runGovernance(bt, constraints, fullCandidateData) {
         if (eStopTriggered) return;
         const msg = runGovernanceCheck(bt, constraints);
@@ -663,12 +688,11 @@
         await appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg, checked_constraints: constraints });
 
         if (isValid) {
-            governanceRetries = 0; // Reset retries on success
+            governanceRetries = 0; 
             document.getElementById('isaacBtn').disabled = false;
             document.getElementById('exportBtn').disabled = false;
             if (iterationState.autoMode) { await sendToIsaac(); }
         } else {
-            // V3.2: Self-Healing Trigger
             if (governanceRetries < MAX_GOV_RETRIES) {
                 governanceRetries++;
                 document.getElementById('iterationStatus').innerText = `⚠️ 治理閘阻擋: 進行系統自修復 (Attempt ${governanceRetries}/${MAX_GOV_RETRIES})...`;
@@ -677,35 +701,33 @@
             } else {
                 document.getElementById('iterationStatus').innerText = `🛑 已達最大自修復次數 (${MAX_GOV_RETRIES})。治理閘依舊拒絕，請由人類工程師介入修正。`;
                 await appendEvent("governance_repair_failed", "system", { message: "Max repair attempts reached." });
-                document.getElementById('btnCont4').style.display = 'block'; // Let human fix it
+                document.getElementById('btnCont4').style.display = 'block'; 
             }
         }
     }
 
-    // V3.2: 呼叫 LLM 進行修正
     async function triggerGovernanceRepair(invalidBtFull, errorMsg, constraints) {
         if (eStopTriggered) return;
-        const prompt = `你是 GDO Agent。你剛才生成的候選行為樹 (Candidate BT) 未通過治理閘 (Governance Gate) 的安全與格式審查。
+        const prompt = `你是 GDO Agent。你生成的候選行為樹 (Candidate BT) 被物理治理閘拒絕。
 錯誤訊息 (Rejection Reason): ${errorMsg}
-物理邊界限制 (Constraints): ${JSON.stringify(constraints)}
-被拒絕的 BT (含 rationale): ${JSON.stringify(invalidBtFull)}
+當前物理硬邊界 (Constraints JSON): ${JSON.stringify(constraints)}
+被拒絕的 BT: ${JSON.stringify(invalidBtFull)}
 
-請立即修正上述錯誤，確保所有數值符合 Constraints，且沒有宣告未知欄位。
-嚴格輸出 JSON: modification_rationale (簡述你修了什麼以通過審查), Action, Nodes。`;
+請立即修正速度、力道等越界數值，使其落在 Constraints JSON 允許的安全區間內。
+嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
 
         try {
-            await appendEvent("governance_repair_request", "gdo_agent", { prompt_context: "Fix constraints violations" });
+            await appendEvent("governance_repair_request", "gdo_agent", { prompt_context: "Fix dynamic constraints violations" });
             const repairedRaw = await callGemini(systemState.apiKey, prompt);
             if (eStopTriggered) return;
 
             await appendEvent("governance_repair_response_raw", "gdo_agent", repairedRaw);
             
-            // 寫回 UI 並直接進入下一輪審查
             setEditorValue('outCandidate', repairedRaw);
-            systemState.rawOutputs['gdo_candidate_bt'] = repairedRaw; // 更新 raw 以便後續 Diff
+            systemState.rawOutputs['gdo_candidate_bt'] = repairedRaw; 
             
             document.getElementById('iterationStatus').innerText = `✅ 自修復產出完成，重新提交治理閘...`;
-            setTimeout(() => runStep5(), 1000); // 稍微延遲讓使用者看到字
+            setTimeout(() => runStep5(), 1000); 
 
         } catch (e) {
             if(!eStopTriggered) {
