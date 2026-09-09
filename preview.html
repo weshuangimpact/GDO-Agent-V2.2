@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox) v4.1</title>
+    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox) v4.2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
@@ -18,7 +18,7 @@
         .status { padding: 5px 10px; background: #000; border-radius: 4px; font-size: 0.9rem; color: #00ff00; min-width: 250px; text-align: center; }
         .main-view { display: flex; flex-grow: 1; height: calc(100vh - 60px); }
         #canvas-container { flex-grow: 1; position: relative; }
-        .sidebar { width: 350px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; }
+        .sidebar { width: 400px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; }
         .sidebar-header { padding: 10px; background: #222; border-bottom: 1px solid #444; font-weight: bold; font-size: 0.9rem; }
         pre { margin: 0; padding: 15px; overflow-y: auto; font-size: 0.8rem; color: #9cdcfe; flex-grow: 1; white-space: pre-wrap; }
     </style>
@@ -26,7 +26,7 @@
 <body>
 
 <div class="header">
-    <h1>GDO 幾何預覽與物理驗證沙盒 (v4.1)</h1>
+    <h1>GDO 幾何預覽與物理驗證沙盒 (v4.2 - 全局建模與姿態控制)</h1>
     <div class="controls">
         <div id="statusDisplay" class="status">STATE: IDLE</div>
         <button id="runBtn" onclick="executeBT()">▶️ 執行全自動排程</button>
@@ -44,12 +44,13 @@
 
 <script>
     let scene, camera, renderer, world;
-    let environmentObjects = {}; // 物件字典
+    let environmentObjects = {}; 
     let gripperBody, gripperMesh;
     let graspConstraint = null;
     let isExecuting = false;
     let btData = null;
     let gripperTargetPos = new CANNON.Vec3(0, 1.5, 0);
+    let gripperTargetQuat = new CANNON.Quaternion(); // 支援夾具旋轉姿態
 
     init();
     animate();
@@ -61,7 +62,7 @@
         scene.background = new THREE.Color(0x2a2a2a);
         
         camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
-        camera.position.set(0, 3, 3);
+        camera.position.set(0, 2.5, 2.5);
         camera.lookAt(0, 0, 0);
         
         renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -80,7 +81,7 @@
         world = new CANNON.World();
         world.gravity.set(0, -9.82, 0);
         world.broadphase = new CANNON.NaiveBroadphase();
-        world.solver.iterations = 20; // 提高解算精度
+        world.solver.iterations = 30;
 
         // 地板
         const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
@@ -91,21 +92,13 @@
         groundMesh.receiveShadow = true;
         scene.add(groundMesh);
 
-        // --- 3. 建立場景物件庫 ---
-        
-        // A. 左上角齒輪 (gear_top_left)
-        createPhysicalObject("gear_top_left", new THREE.CylinderGeometry(0.15, 0.15, 0.05, 32), new CANNON.Cylinder(0.15, 0.15, 0.05, 16), 0xaaaaaa, new CANNON.Vec3(-0.4, 0.025, -0.3), 2, true);
+        // --- 3. 建立塑料外框 (Plastic Bin) 邊界 ---
+        createBinBoundary();
 
-        // B. 左側彈簧 (spring_left) - 用長方體代替
-        createPhysicalObject("spring_left", new THREE.BoxGeometry(0.1, 0.1, 0.3), new CANNON.Box(new CANNON.Vec3(0.05, 0.05, 0.15)), 0x555555, new CANNON.Vec3(-0.35, 0.05, 0.1), 1);
+        // --- 4. 建立影像中的全散落零件 ---
+        buildEnvironmentObjects();
 
-        // C. 底部螺紋軸 (shaft_bottom)
-        createPhysicalObject("shaft_bottom", new THREE.BoxGeometry(0.4, 0.05, 0.05), new CANNON.Box(new CANNON.Vec3(0.2, 0.025, 0.025)), 0xcccccc, new CANNON.Vec3(0.0, 0.025, 0.4), 1);
-
-        // D. 中央結合體 (blue_cylindrical_component) - 複合剛體 (Compound Body)
-        createCompoundObject("blue_cylindrical_component");
-
-        // --- 4. 建立平行雙爪夾具 (Two-Finger Gripper) ---
+        // --- 5. 建立平行雙爪夾具 (Two-Finger Gripper) ---
         createGripper();
 
         // 載入 JSON
@@ -113,56 +106,111 @@
         window.addEventListener('resize', onWindowResize, false);
     }
 
-    // 建立單一物件
-    function createPhysicalObject(id, geometry, shape, color, position, mass, isCylinder = false) {
+    function createBinBoundary() {
+        const binColor = 0xffffff;
+        const mat = new THREE.MeshPhongMaterial({ color: binColor, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+        
+        // 底板
+        createStaticBox(0, 0.01, 0, 1.2, 0.02, 0.9, mat);
+        // 上下圍牆
+        createStaticBox(0, 0.15, -0.45, 1.2, 0.3, 0.02, mat);
+        createStaticBox(0, 0.15, 0.45, 1.2, 0.3, 0.02, mat);
+        // 左右圍牆
+        createStaticBox(-0.6, 0.15, 0, 0.02, 0.3, 0.9, mat);
+        createStaticBox(0.6, 0.15, 0, 0.02, 0.3, 0.9, mat);
+    }
+
+    function createStaticBox(x, y, z, w, h, d, material) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+        const body = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)) });
+        body.position.set(x, y, z);
+        world.addBody(body);
+    }
+
+    function buildEnvironmentObjects() {
+        // 金屬材質設定
+        const gearMat = 0x888888;
+        const shaftMat = 0xaaaaaa;
+        const springMat = 0x555555;
+
+        // A. 齒輪 (Gears)
+        const gearGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.03, 32);
+        const gearShape = new CANNON.Cylinder(0.12, 0.12, 0.03, 16);
+        createPhysicalObject("gear_top_left", gearGeom, gearShape, gearMat, new CANNON.Vec3(-0.4, 0.03, -0.25), 2, true);
+        createPhysicalObject("gear_bottom_left", gearGeom, gearShape, gearMat, new CANNON.Vec3(-0.4, 0.03, 0.25), 2, true);
+        createPhysicalObject("gear_top_right", gearGeom, gearShape, gearMat, new CANNON.Vec3(0.4, 0.03, -0.25), 2, true);
+
+        // B. 金屬圓軸 (Shafts)
+        const shaftGeom = new THREE.CylinderGeometry(0.025, 0.025, 0.4, 16);
+        const shaftShape = new CANNON.Cylinder(0.025, 0.025, 0.4, 12);
+        // 上方橫軸 (旋轉 Z 90度)
+        createPhysicalObject("shaft_top", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.0, 0.025, -0.35), 1.5, true, [0, 0, Math.PI/2]);
+        // 下方橫軸
+        createPhysicalObject("shaft_bottom", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.0, 0.025, 0.35), 1.5, true, [0, 0, Math.PI/2]);
+        // 右側直軸 (旋轉 X 90度)
+        createPhysicalObject("shaft_right", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.45, 0.025, 0.1), 1.5, true, [Math.PI/2, 0, 0]);
+
+        // C. 彈簧 (Springs) - 以膠囊體或圓柱簡化
+        const springGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.25, 16);
+        const springShape = new CANNON.Cylinder(0.04, 0.04, 0.25, 12);
+        createPhysicalObject("spring_top_left", springGeom, springShape, springMat, new CANNON.Vec3(-0.25, 0.04, -0.15), 1, true, [Math.PI/2, Math.PI/4, 0]);
+        createPhysicalObject("spring_bottom_left", springGeom, springShape, springMat, new CANNON.Vec3(-0.25, 0.04, 0.15), 1, true, [Math.PI/2, -Math.PI/4, 0]);
+        createPhysicalObject("spring_top_right", springGeom, springShape, springMat, new CANNON.Vec3(0.25, 0.04, -0.15), 1, true, [Math.PI/2, -Math.PI/4, 0]);
+        createPhysicalObject("spring_bottom_center", springGeom, springShape, springMat, new CANNON.Vec3(0.1, 0.04, 0.2), 1, true, [0, 0, Math.PI/2]);
+
+        // D. 中央 T 形組合件 (Compound Body)
+        createCompoundObject("central_t_assembly");
+    }
+
+    function createPhysicalObject(id, geometry, shape, color, position, mass, isCylinder = false, eulerRot = [0,0,0]) {
         const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: color }));
         mesh.castShadow = true;
         scene.add(mesh);
 
         const body = new CANNON.Body({ mass: mass });
-        
-        // Cannon.js 的 Cylinder 預設朝 Z 軸，需旋轉以匹配 Three.js 的 Y 軸
+        const quat = new CANNON.Quaternion();
+        quat.setFromEuler(eulerRot[0], eulerRot[1], eulerRot[2], 'XYZ');
+
         if (isCylinder) {
-            const quat = new CANNON.Quaternion();
-            quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-            body.addShape(shape, new CANNON.Vec3(0, 0, 0), quat);
-        } else {
-            body.addShape(shape);
+            // Cannon 的 Cylinder 預設為 Z 軸向，為了對齊 Three.js 預設的 Y 軸，做一次基準旋轉
+            const baseQuat = new CANNON.Quaternion();
+            baseQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            quat.mult(baseQuat, quat); 
         }
         
+        body.addShape(shape, new CANNON.Vec3(0,0,0), quat);
         body.position.copy(position);
         world.addBody(body);
         
         environmentObjects[id] = { mesh, body };
     }
 
-    // 建立複合結合件 (藍色圓柱 + 灰色鐵塊)
     function createCompoundObject(id) {
-        // 物理 Body (總質量)
         const compBody = new CANNON.Body({ mass: 5 });
         
-        // 灰色鐵塊 Shape & Offset
-        const boxShape = new CANNON.Box(new CANNON.Vec3(0.15, 0.1, 0.15));
-        compBody.addShape(boxShape, new CANNON.Vec3(0.15, 0, 0));
+        // 灰色鐵塊
+        const boxShape = new CANNON.Box(new CANNON.Vec3(0.08, 0.1, 0.15));
+        compBody.addShape(boxShape, new CANNON.Vec3(0.1, 0, 0));
         
-        // 藍色圓柱 Shape & Offset (Cannon Cylinder 朝 Z，需轉向 X)
-        const cylShape = new CANNON.Cylinder(0.1, 0.1, 0.25, 16);
+        // 藍色圓柱 (Cannon Cylinder 朝 Z，轉向 X)
+        const cylShape = new CANNON.Cylinder(0.06, 0.06, 0.15, 16);
         const cylQuat = new CANNON.Quaternion();
         cylQuat.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2);
-        compBody.addShape(cylShape, new CANNON.Vec3(-0.125, 0, 0), cylQuat);
+        compBody.addShape(cylShape, new CANNON.Vec3(-0.05, 0, 0), cylQuat);
 
-        compBody.position.set(-0.1, 0.1, 0);
+        compBody.position.set(0, 0.1, 0);
         world.addBody(compBody);
 
-        // 視覺 Group
         const group = new THREE.Group();
-        const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.3), new THREE.MeshPhongMaterial({ color: 0x888888 }));
-        boxMesh.position.set(0.15, 0, 0);
+        const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.3), new THREE.MeshPhongMaterial({ color: 0x999999 }));
+        boxMesh.position.set(0.1, 0, 0);
         boxMesh.castShadow = true;
         
-        const cylMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 32), new THREE.MeshPhongMaterial({ color: 0x0055ff }));
+        const cylMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.15, 32), new THREE.MeshPhongMaterial({ color: 0x0077ff }));
         cylMesh.rotation.z = Math.PI / 2;
-        cylMesh.position.set(-0.125, 0, 0);
+        cylMesh.position.set(-0.05, 0, 0);
         cylMesh.castShadow = true;
 
         group.add(boxMesh);
@@ -176,13 +224,10 @@
         const group = new THREE.Group();
         const mat = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
         
-        // 基座
         const base = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.1), mat);
         base.position.y = 0.1;
-        // 左爪
         const fingerL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.1), mat);
         fingerL.position.set(-0.09, 0, 0);
-        // 右爪
         const fingerR = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.1), mat);
         fingerR.position.set(0.09, 0, 0);
 
@@ -190,7 +235,6 @@
         scene.add(group);
         gripperMesh = group;
 
-        // 物理 (簡化為一個包圍盒即可，用 LockConstraint 鎖定)
         gripperBody = new CANNON.Body({ 
             mass: 0, type: CANNON.Body.KINEMATIC, 
             shape: new CANNON.Box(new CANNON.Vec3(0.1, 0.1, 0.05)) 
@@ -205,22 +249,34 @@
             btData = JSON.parse(rawData);
             document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
         } else {
-            document.getElementById('jsonDisplay').innerText = "// 尚未接收到 localStorage 資料";
-            document.getElementById('runBtn').disabled = true;
+            // 預設演示測試用 JSON (包含旋轉與自訂放置點)
+            btData = {
+                "Action": "Sequence",
+                "Nodes": [
+                    {
+                        "Node": "Sequence",
+                        "Nodes": [
+                            {
+                                "Node": "FindGraspPoint",
+                                "Target": "shaft_top",
+                                "offset_xyz": [0, 0.05, -0.35],
+                                "rot_euler": [0, 1.57, 0],
+                                "drop_xyz": [-0.9, 0.15, -0.3]
+                            }
+                        ]
+                    }
+                ]
+            };
+            document.getElementById('jsonDisplay').innerText = "// 尚未接收到外部資料，載入展示用預設 BT\n" + JSON.stringify(btData, null, 2);
         }
     }
 
-    // --- 非同步行為樹排程器 (支援多物件) ---
     async function executeBT() {
         if (isExecuting || !btData || !btData.Nodes) return;
         isExecuting = true;
         document.getElementById('runBtn').disabled = true;
         
         try {
-            // Drop-off 區域 (右側)
-            let dropX = 0.6;
-            
-            // 遍歷所有 Sequence 子任務
             for (let i = 0; i < btData.Nodes.length; i++) {
                 const task = btData.Nodes[i];
                 if (!task.Nodes) continue;
@@ -232,6 +288,16 @@
                 const offset = graspNode.offset_xyz || [0, 0, 0];
                 const targetObj = environmentObjects[targetId];
 
+                // 解析姿態旋轉 (Euler 弧度)
+                const rx = graspNode.rot_euler ? graspNode.rot_euler[0] : 0;
+                const ry = graspNode.rot_euler ? graspNode.rot_euler[1] : 0;
+                const rz = graspNode.rot_euler ? graspNode.rot_euler[2] : 0;
+
+                // 解析自訂卸載座標，若無則防呆為外框右側
+                const dropX = graspNode.drop_xyz ? graspNode.drop_xyz[0] : 0.9;
+                const dropY = graspNode.drop_xyz ? graspNode.drop_xyz[1] : 0.15;
+                const dropZ = graspNode.drop_xyz ? graspNode.drop_xyz[2] : 0;
+
                 if (!targetObj) {
                     console.warn("找不到物件: " + targetId);
                     continue;
@@ -239,43 +305,38 @@
 
                 updateStatus(`[${i+1}/${btData.Nodes.length}] APPROACHING: ${targetId}`);
                 
-                // 1. 移動至正上方
-                await moveGripper(offset[0], 0.8, offset[2], 0.05);
+                // 1. 移動並旋轉姿態至正上方
+                await moveGripper(offset[0], 0.8, offset[2], rx, ry, rz, 0.05);
                 // 2. 下降
-                await moveGripper(offset[0], offset[1], offset[2], 0.02);
+                await moveGripper(offset[0], offset[1], offset[2], rx, ry, rz, 0.02);
 
                 updateStatus(`[${i+1}/${btData.Nodes.length}] GRASPING...`);
                 await sleep(400);
                 
-                // 使用 LockConstraint (剛性鎖定)，消除晃動
                 graspConstraint = new CANNON.LockConstraint(gripperBody, targetObj.body);
                 world.addConstraint(graspConstraint);
                 await sleep(200);
 
                 updateStatus(`[${i+1}/${btData.Nodes.length}] LIFTING...`);
-                await moveGripper(offset[0], 0.8, offset[2], 0.03);
+                await moveGripper(offset[0], 0.8, offset[2], rx, ry, rz, 0.03);
 
                 updateStatus(`[${i+1}/${btData.Nodes.length}] MOVING TO DROP ZONE...`);
-                await moveGripper(dropX, 0.8, 0, 0.05);
+                // 3. 移動至自訂放置點上方 (此處還原夾爪角度為預設值 0)
+                await moveGripper(dropX, 0.8, dropZ, 0, 0, 0, 0.05);
 
                 updateStatus(`[${i+1}/${btData.Nodes.length}] LOWERING TO PLACE...`);
-                // 3. 放下至桌面高度，避免自由落體砸壞
-                await moveGripper(dropX, 0.2, 0, 0.03);
+                await moveGripper(dropX, dropY, dropZ, 0, 0, 0, 0.03);
 
                 updateStatus(`[${i+1}/${btData.Nodes.length}] RELEASING...`);
                 world.removeConstraint(graspConstraint);
                 graspConstraint = null;
                 await sleep(300);
 
-                // 退回高空
-                await moveGripper(dropX, 0.8, 0, 0.05);
-                
-                // 錯開放置位置，避免下一個物件砸到前一個
-                dropX += 0.2; 
+                await moveGripper(dropX, 0.8, dropZ, 0, 0, 0, 0.05);
             }
 
-            updateStatus("STATE: ALL TASKS ACCOMPLISHED (BIN EMPTY)");
-            await moveGripper(0, 1.5, 0, 0.05);
+            updateStatus("STATE: ALL TASKS ACCOMPLISHED");
+            await moveGripper(0, 1.5, 0, 0, 0, 0, 0.05);
             
         } catch (e) {
             updateStatus("ERROR: " + e.message);
@@ -284,20 +345,34 @@
         }
     }
 
-    function moveGripper(x, y, z, speed) {
+    // 更新演算法加入 Quaternion 插值運算 (SLERP)
+    function moveGripper(x, y, z, rx, ry, rz, speed) {
         return new Promise(resolve => {
-            const target = new CANNON.Vec3(x, y, z);
+            const targetP = new CANNON.Vec3(x, y, z);
+            const targetQ = new CANNON.Quaternion();
+            targetQ.setFromEuler(rx, ry, rz, 'XYZ');
+
             const interval = setInterval(() => {
-                const diff = target.vsub(gripperTargetPos);
-                if (diff.length() < 0.02) {
-                    gripperTargetPos.copy(target);
+                const diff = targetP.vsub(gripperTargetPos);
+                const posDone = diff.length() < 0.02;
+
+                // 姿態插值 (SLERP)
+                gripperTargetQuat.slerp(targetQ, 0.15, gripperTargetQuat);
+                const angleDiff = Math.abs(gripperTargetQuat.dot(targetQ));
+                const rotDone = angleDiff > 0.99;
+
+                if (posDone && rotDone) {
+                    gripperTargetPos.copy(targetP);
+                    gripperTargetQuat.copy(targetQ);
                     clearInterval(interval);
                     resolve();
                 } else {
-                    diff.normalize();
-                    gripperTargetPos.x += diff.x * speed;
-                    gripperTargetPos.y += diff.y * speed;
-                    gripperTargetPos.z += diff.z * speed;
+                    if (!posDone) {
+                        diff.normalize();
+                        gripperTargetPos.x += diff.x * speed;
+                        gripperTargetPos.y += diff.y * speed;
+                        gripperTargetPos.z += diff.z * speed;
+                    }
                 }
             }, 16);
         });
@@ -310,15 +385,14 @@
         requestAnimationFrame(animate);
         world.step(1 / 60);
 
-        // 同步所有環境物件的 物理 -> 視覺
         for (let key in environmentObjects) {
             const obj = environmentObjects[key];
             obj.mesh.position.copy(obj.body.position);
             obj.mesh.quaternion.copy(obj.body.quaternion);
         }
 
-        // 更新夾爪
         gripperBody.position.copy(gripperTargetPos);
+        gripperBody.quaternion.copy(gripperTargetQuat);
         gripperMesh.position.copy(gripperBody.position);
         gripperMesh.quaternion.copy(gripperBody.quaternion);
 
