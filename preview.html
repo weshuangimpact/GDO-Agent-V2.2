@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <style>
+        :root { --primary: #004494; --bg: #1e1e1e; --text: #d4d4d4; --panel: #2d2d2d; }
+        body { font-family: monospace; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .header { background: #111; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; flex-shrink: 0; }
+        .header h1 { margin: 0; font-size: 1.2rem; color: #fff; }
+        .controls { display: flex; gap: 15px; align-items: center; }
+        button { background: var(--primary); color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-family: monospace; }
+        button:hover { background: #0055b3; }
+        button:disabled { background: #555; cursor: not-allowed; color: #888; }
+        .status { padding: 5px 10px; background: #000; border-radius: 4px; font-size: 0.9rem; color: #00ff00; min-width: 200px; text-align: center; }
+        .main-view { display: flex; flex-grow: 1; height: calc(100vh - 60px); }
+        #canvas-container { flex-grow: 1; position: relative; }
+        .sidebar { width: 350px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 10px; background: #222; border-bottom: 1px solid #444; font-weight: bold; font-size: 0.9rem; }
+        pre { margin: 0; padding: 15px; overflow-y: auto; font-size: 0.8rem; color: #9cdcfe; flex-grow: 1; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>GDO 幾何預覽與物理驗證沙盒 (Physics Sandbox)</h1>
+    <div class="controls">
+        <div id="statusDisplay" class="status">STATE: IDLE</div>
+        <button id="runBtn" onclick="executeBT()">▶️ 執行策略 (Run BT)</button>
+        <button onclick="location.reload()" style="background: #666;">🔄 重置場景</button>
+    </div>
+</div>
+
+<div class="main-view">
+    <div id="canvas-container"></div>
+    <div class="sidebar">
+        <div class="sidebar-header">接收的 Candidate BT (JSON)</div>
+        <pre id="jsonDisplay">等待資料載入...</pre>
+    </div>
+</div>
+
+<script>
+    // --- 系統變數 ---
+    let scene, camera, renderer;
+    let world;
+    let meshes = [], bodies = [];
+    let gripperBody, gripperMesh;
+    let targetBody, targetMesh;
+    let graspConstraint = null;
+    let animationId;
+    let isExecuting = false;
+    let btData = null;
+    
+    // 夾爪運動學狀態
+    let gripperTargetPos = new CANNON.Vec3(0, 1.5, 0);
+
+    init();
+    animate();
+
+    function init() {
+        // 1. 初始化 Three.js 視覺場景
+        const container = document.getElementById('canvas-container');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2a2a2a);
+        
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(2, 2.5, 3);
+        camera.lookAt(0, 0, 0);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        scene.add(new THREE.GridHelper(5, 20, 0x555555, 0x444444));
+
+        // 2. 初始化 Cannon.js 物理世界
+        world = new CANNON.World();
+        world.gravity.set(0, -9.82, 0);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        // 地板 (Physics + Visual)
+        const groundShape = new CANNON.Plane();
+        const groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        world.addBody(groundBody);
+        
+        const groundGeo = new THREE.PlaneGeometry(10, 10);
+        const groundMat = new THREE.MeshPhongMaterial({ color: 0x333333, depthWrite: false });
+        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        // 3. 建立環境物件 (數位孿生 Mockup)
+        // 灰色干涉物
+        createPhysicalObject(
+            new THREE.BoxGeometry(0.5, 0.4, 0.6), 
+            new CANNON.Box(new CANNON.Vec3(0.25, 0.2, 0.3)), 
+            0x888888, 
+            new CANNON.Vec3(0.2, 0.2, 0),
+            10 // mass
+        );
+
+        // 目標藍色圓柱 (使用 Box 碰撞體以防止過度滾動)
+        const cylGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.5, 32);
+        cylGeo.rotateZ(Math.PI / 2); // 視覺轉向 X 軸
+        const targetObj = createPhysicalObject(
+            cylGeo,
+            new CANNON.Box(new CANNON.Vec3(0.25, 0.18, 0.18)), 
+            0x0055ff, 
+            new CANNON.Vec3(-0.25, 0.18, 0),
+            1 // mass
+        );
+        targetBody = targetObj.body;
+        targetMesh = targetObj.mesh;
+
+        // 4. 建立夾爪 (Kinematic Body)
+        const gripGeo = new THREE.BoxGeometry(0.1, 0.3, 0.1);
+        const gripMat = new THREE.MeshPhongMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
+        gripperMesh = new THREE.Mesh(gripGeo, gripMat);
+        gripperMesh.castShadow = true;
+        scene.add(gripperMesh);
+
+        const gripShape = new CANNON.Box(new CANNON.Vec3(0.05, 0.15, 0.05));
+        gripperBody = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, shape: gripShape });
+        gripperBody.position.copy(gripperTargetPos);
+        world.addBody(gripperBody);
+
+        // 5. 載入 JSON 資料
+        loadBTData();
+        
+        window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function createPhysicalObject(geometry, shape, color, position, mass) {
+        const material = new THREE.MeshPhongMaterial({ color: color });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        meshes.push(mesh);
+
+        const body = new CANNON.Body({ mass: mass, shape: shape });
+        body.position.copy(position);
+        world.addBody(body);
+        bodies.push(body);
+        
+        return { mesh, body };
+    }
+
+    function loadBTData() {
+        try {
+            const rawData = localStorage.getItem('gdo_candidate_bt');
+            if (rawData) {
+                btData = JSON.parse(rawData);
+                document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
+            } else {
+                document.getElementById('jsonDisplay').innerText = "// 尚未接收到 localStorage 資料\n// 請先在 index.html 執行 Step 4";
+                document.getElementById('runBtn').disabled = true;
+            }
+        } catch (e) {
+            document.getElementById('jsonDisplay').innerText = "JSON 解析錯誤: " + e.message;
+        }
+    }
+
+    // --- 非同步行為樹直譯器 (BT Executor) ---
+    async function executeBT() {
+        if (isExecuting || !btData) return;
+        isExecuting = true;
+        document.getElementById('runBtn').disabled = true;
+        
+        try {
+            // 解析目標座標
+            let targetX = -0.25, targetY = 0.3, targetZ = 0;
+            if (btData.Nodes) {
+                const graspNode = btData.Nodes.find(n => n.Node === "FindGraspPoint");
+                if (graspNode && graspNode.offset_xyz) {
+                    targetX = graspNode.offset_xyz[0];
+                    targetY = graspNode.offset_xyz[1];
+                    targetZ = graspNode.offset_xyz[2];
+                }
+            }
+
+            // 執行管線指令
+            updateStatus("STATE: APPROACHING...");
+            await moveGripper(targetX, 1.0, targetZ, 0.05); // 移至正上方
+            await moveGripper(targetX, targetY, targetZ, 0.02); // 緩慢下降
+
+            updateStatus("STATE: CLOSING GRIPPER...");
+            await sleep(500);
+            // 建立物理約束 (Point-to-Point 模擬夾持)
+            graspConstraint = new CANNON.PointToPointConstraint(
+                gripperBody, new CANNON.Vec3(0, -0.15, 0),
+                targetBody, new CANNON.Vec3(0, 0, 0)
+            );
+            world.addConstraint(graspConstraint);
+            await sleep(500);
+
+            updateStatus("STATE: EXTRACTING...");
+            await moveGripper(targetX, 1.2, targetZ, 0.02); // 垂直拉起
+
+            updateStatus("STATE: MOVING TO DROP-OFF...");
+            await moveGripper(1.0, 1.2, 0, 0.05); // 移至放置區
+
+            updateStatus("STATE: OPENING GRIPPER...");
+            await sleep(500);
+            world.removeConstraint(graspConstraint); // 釋放約束，重力接管
+            graspConstraint = null;
+            await sleep(1000);
+
+            updateStatus("STATE: RESETTING...");
+            await moveGripper(0, 1.5, 0, 0.05);
+            
+            updateStatus("STATE: MISSION ACCOMPLISHED");
+        } catch (e) {
+            updateStatus("ERROR: " + e.message);
+        } finally {
+            isExecuting = false;
+            document.getElementById('runBtn').disabled = false;
+        }
+    }
+
+    // 運動學平滑插值函式
+    function moveGripper(x, y, z, speed) {
+        return new Promise(resolve => {
+            const target = new CANNON.Vec3(x, y, z);
+            const interval = setInterval(() => {
+                const diff = target.vsub(gripperTargetPos);
+                if (diff.length() < 0.05) {
+                    gripperTargetPos.copy(target);
+                    clearInterval(interval);
+                    resolve();
+                } else {
+                    diff.normalize();
+                    gripperTargetPos.x += diff.x * speed;
+                    gripperTargetPos.y += diff.y * speed;
+                    gripperTargetPos.z += diff.z * speed;
+                }
+            }, 16);
+        });
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    function updateStatus(msg) { document.getElementById('statusDisplay').innerText = msg; }
+
+    // --- 渲染與物理同步迴圈 ---
+    function animate() {
+        animationId = requestAnimationFrame(animate);
+        
+        // 物理引擎步進
+        world.step(1 / 60);
+
+        // 同步物理 Body 至 Three.js Mesh
+        for (let i = 0; i < meshes.length; i++) {
+            meshes[i].position.copy(bodies[i].position);
+            meshes[i].quaternion.copy(bodies[i].quaternion);
+        }
+
+        // 獨立更新夾爪 (Kinematic)
+        gripperBody.position.copy(gripperTargetPos);
+        gripperMesh.position.copy(gripperBody.position);
+        gripperMesh.quaternion.copy(gripperBody.quaternion);
+
+        renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+        const container = document.getElementById('canvas-container');
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+</script>
+</body>
+</html>
