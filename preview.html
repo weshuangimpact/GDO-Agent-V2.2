@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox)</title>
+    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox) v4.1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
@@ -15,7 +15,7 @@
         button { background: var(--primary); color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.2s; font-family: monospace; }
         button:hover { background: #0055b3; }
         button:disabled { background: #555; cursor: not-allowed; color: #888; }
-        .status { padding: 5px 10px; background: #000; border-radius: 4px; font-size: 0.9rem; color: #00ff00; min-width: 200px; text-align: center; }
+        .status { padding: 5px 10px; background: #000; border-radius: 4px; font-size: 0.9rem; color: #00ff00; min-width: 250px; text-align: center; }
         .main-view { display: flex; flex-grow: 1; height: calc(100vh - 60px); }
         #canvas-container { flex-grow: 1; position: relative; }
         .sidebar { width: 350px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; }
@@ -26,10 +26,10 @@
 <body>
 
 <div class="header">
-    <h1>GDO 幾何預覽與物理驗證沙盒 (Physics Sandbox)</h1>
+    <h1>GDO 幾何預覽與物理驗證沙盒 (v4.1)</h1>
     <div class="controls">
         <div id="statusDisplay" class="status">STATE: IDLE</div>
-        <button id="runBtn" onclick="executeBT()">▶️ 執行策略 (Run BT)</button>
+        <button id="runBtn" onclick="executeBT()">▶️ 執行全自動排程</button>
         <button onclick="location.reload()" style="background: #666;">🔄 重置場景</button>
     </div>
 </div>
@@ -43,31 +43,25 @@
 </div>
 
 <script>
-    // --- 系統變數 ---
-    let scene, camera, renderer;
-    let world;
-    let meshes = [], bodies = [];
+    let scene, camera, renderer, world;
+    let environmentObjects = {}; // 物件字典
     let gripperBody, gripperMesh;
-    let targetBody, targetMesh;
     let graspConstraint = null;
-    let animationId;
     let isExecuting = false;
     let btData = null;
-    
-    // 夾爪運動學狀態
     let gripperTargetPos = new CANNON.Vec3(0, 1.5, 0);
 
     init();
     animate();
 
     function init() {
-        // 1. 初始化 Three.js 視覺場景
+        // --- 1. Three.js 場景設定 ---
         const container = document.getElementById('canvas-container');
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x2a2a2a);
         
-        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-        camera.position.set(2, 2.5, 3);
+        camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 3, 3);
         camera.lookAt(0, 0, 0);
         
         renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -75,170 +69,227 @@
         renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(5, 10, 5);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(2, 5, 2);
         dirLight.castShadow = true;
         scene.add(dirLight);
-
         scene.add(new THREE.GridHelper(5, 20, 0x555555, 0x444444));
 
-        // 2. 初始化 Cannon.js 物理世界
+        // --- 2. Cannon.js 物理世界 ---
         world = new CANNON.World();
         world.gravity.set(0, -9.82, 0);
         world.broadphase = new CANNON.NaiveBroadphase();
-        world.solver.iterations = 10;
+        world.solver.iterations = 20; // 提高解算精度
 
-        // 地板 (Physics + Visual)
-        const groundShape = new CANNON.Plane();
-        const groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
+        // 地板
+        const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
         groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
         world.addBody(groundBody);
-        
-        const groundGeo = new THREE.PlaneGeometry(10, 10);
-        const groundMat = new THREE.MeshPhongMaterial({ color: 0x333333, depthWrite: false });
-        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+        const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshPhongMaterial({ color: 0x333333 }));
         groundMesh.rotation.x = -Math.PI / 2;
         groundMesh.receiveShadow = true;
         scene.add(groundMesh);
 
-        // 3. 建立環境物件 (數位孿生 Mockup)
-        // 灰色干涉物
-        createPhysicalObject(
-            new THREE.BoxGeometry(0.5, 0.4, 0.6), 
-            new CANNON.Box(new CANNON.Vec3(0.25, 0.2, 0.3)), 
-            0x888888, 
-            new CANNON.Vec3(0.2, 0.2, 0),
-            10 // mass
-        );
-
-        // 目標藍色圓柱 (使用 Box 碰撞體以防止過度滾動)
-        const cylGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.5, 32);
-        cylGeo.rotateZ(Math.PI / 2); // 視覺轉向 X 軸
-        const targetObj = createPhysicalObject(
-            cylGeo,
-            new CANNON.Box(new CANNON.Vec3(0.25, 0.18, 0.18)), 
-            0x0055ff, 
-            new CANNON.Vec3(-0.25, 0.18, 0),
-            1 // mass
-        );
-        targetBody = targetObj.body;
-        targetMesh = targetObj.mesh;
-
-        // 4. 建立夾爪 (Kinematic Body)
-        const gripGeo = new THREE.BoxGeometry(0.1, 0.3, 0.1);
-        const gripMat = new THREE.MeshPhongMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
-        gripperMesh = new THREE.Mesh(gripGeo, gripMat);
-        gripperMesh.castShadow = true;
-        scene.add(gripperMesh);
-
-        const gripShape = new CANNON.Box(new CANNON.Vec3(0.05, 0.15, 0.05));
-        gripperBody = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, shape: gripShape });
-        gripperBody.position.copy(gripperTargetPos);
-        world.addBody(gripperBody);
-
-        // 5. 載入 JSON 資料
-        loadBTData();
+        // --- 3. 建立場景物件庫 ---
         
+        // A. 左上角齒輪 (gear_top_left)
+        createPhysicalObject("gear_top_left", new THREE.CylinderGeometry(0.15, 0.15, 0.05, 32), new CANNON.Cylinder(0.15, 0.15, 0.05, 16), 0xaaaaaa, new CANNON.Vec3(-0.4, 0.025, -0.3), 2, true);
+
+        // B. 左側彈簧 (spring_left) - 用長方體代替
+        createPhysicalObject("spring_left", new THREE.BoxGeometry(0.1, 0.1, 0.3), new CANNON.Box(new CANNON.Vec3(0.05, 0.05, 0.15)), 0x555555, new CANNON.Vec3(-0.35, 0.05, 0.1), 1);
+
+        // C. 底部螺紋軸 (shaft_bottom)
+        createPhysicalObject("shaft_bottom", new THREE.BoxGeometry(0.4, 0.05, 0.05), new CANNON.Box(new CANNON.Vec3(0.2, 0.025, 0.025)), 0xcccccc, new CANNON.Vec3(0.0, 0.025, 0.4), 1);
+
+        // D. 中央結合體 (blue_cylindrical_component) - 複合剛體 (Compound Body)
+        createCompoundObject("blue_cylindrical_component");
+
+        // --- 4. 建立平行雙爪夾具 (Two-Finger Gripper) ---
+        createGripper();
+
+        // 載入 JSON
+        loadBTData();
         window.addEventListener('resize', onWindowResize, false);
     }
 
-    function createPhysicalObject(geometry, shape, color, position, mass) {
-        const material = new THREE.MeshPhongMaterial({ color: color });
-        const mesh = new THREE.Mesh(geometry, material);
+    // 建立單一物件
+    function createPhysicalObject(id, geometry, shape, color, position, mass, isCylinder = false) {
+        const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: color }));
         mesh.castShadow = true;
-        mesh.receiveShadow = true;
         scene.add(mesh);
-        meshes.push(mesh);
 
-        const body = new CANNON.Body({ mass: mass, shape: shape });
+        const body = new CANNON.Body({ mass: mass });
+        
+        // Cannon.js 的 Cylinder 預設朝 Z 軸，需旋轉以匹配 Three.js 的 Y 軸
+        if (isCylinder) {
+            const quat = new CANNON.Quaternion();
+            quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            body.addShape(shape, new CANNON.Vec3(0, 0, 0), quat);
+        } else {
+            body.addShape(shape);
+        }
+        
         body.position.copy(position);
         world.addBody(body);
-        bodies.push(body);
         
-        return { mesh, body };
+        environmentObjects[id] = { mesh, body };
+    }
+
+    // 建立複合結合件 (藍色圓柱 + 灰色鐵塊)
+    function createCompoundObject(id) {
+        // 物理 Body (總質量)
+        const compBody = new CANNON.Body({ mass: 5 });
+        
+        // 灰色鐵塊 Shape & Offset
+        const boxShape = new CANNON.Box(new CANNON.Vec3(0.15, 0.1, 0.15));
+        compBody.addShape(boxShape, new CANNON.Vec3(0.15, 0, 0));
+        
+        // 藍色圓柱 Shape & Offset (Cannon Cylinder 朝 Z，需轉向 X)
+        const cylShape = new CANNON.Cylinder(0.1, 0.1, 0.25, 16);
+        const cylQuat = new CANNON.Quaternion();
+        cylQuat.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2);
+        compBody.addShape(cylShape, new CANNON.Vec3(-0.125, 0, 0), cylQuat);
+
+        compBody.position.set(-0.1, 0.1, 0);
+        world.addBody(compBody);
+
+        // 視覺 Group
+        const group = new THREE.Group();
+        const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.3), new THREE.MeshPhongMaterial({ color: 0x888888 }));
+        boxMesh.position.set(0.15, 0, 0);
+        boxMesh.castShadow = true;
+        
+        const cylMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 32), new THREE.MeshPhongMaterial({ color: 0x0055ff }));
+        cylMesh.rotation.z = Math.PI / 2;
+        cylMesh.position.set(-0.125, 0, 0);
+        cylMesh.castShadow = true;
+
+        group.add(boxMesh);
+        group.add(cylMesh);
+        scene.add(group);
+
+        environmentObjects[id] = { mesh: group, body: compBody };
+    }
+
+    function createGripper() {
+        const group = new THREE.Group();
+        const mat = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        
+        // 基座
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.1), mat);
+        base.position.y = 0.1;
+        // 左爪
+        const fingerL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.1), mat);
+        fingerL.position.set(-0.09, 0, 0);
+        // 右爪
+        const fingerR = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.1), mat);
+        fingerR.position.set(0.09, 0, 0);
+
+        group.add(base); group.add(fingerL); group.add(fingerR);
+        scene.add(group);
+        gripperMesh = group;
+
+        // 物理 (簡化為一個包圍盒即可，用 LockConstraint 鎖定)
+        gripperBody = new CANNON.Body({ 
+            mass: 0, type: CANNON.Body.KINEMATIC, 
+            shape: new CANNON.Box(new CANNON.Vec3(0.1, 0.1, 0.05)) 
+        });
+        gripperBody.position.copy(gripperTargetPos);
+        world.addBody(gripperBody);
     }
 
     function loadBTData() {
-        try {
-            const rawData = localStorage.getItem('gdo_candidate_bt');
-            if (rawData) {
-                btData = JSON.parse(rawData);
-                document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
-            } else {
-                document.getElementById('jsonDisplay').innerText = "// 尚未接收到 localStorage 資料\n// 請先在 index.html 執行 Step 4";
-                document.getElementById('runBtn').disabled = true;
-            }
-        } catch (e) {
-            document.getElementById('jsonDisplay').innerText = "JSON 解析錯誤: " + e.message;
+        const rawData = localStorage.getItem('gdo_candidate_bt');
+        if (rawData) {
+            btData = JSON.parse(rawData);
+            document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
+        } else {
+            document.getElementById('jsonDisplay').innerText = "// 尚未接收到 localStorage 資料";
+            document.getElementById('runBtn').disabled = true;
         }
     }
 
-    // --- 非同步行為樹直譯器 (BT Executor) ---
+    // --- 非同步行為樹排程器 (支援多物件) ---
     async function executeBT() {
-        if (isExecuting || !btData) return;
+        if (isExecuting || !btData || !btData.Nodes) return;
         isExecuting = true;
         document.getElementById('runBtn').disabled = true;
         
         try {
-            // 解析目標座標
-            let targetX = -0.25, targetY = 0.3, targetZ = 0;
-            if (btData.Nodes) {
-                const graspNode = btData.Nodes.find(n => n.Node === "FindGraspPoint");
-                if (graspNode && graspNode.offset_xyz) {
-                    targetX = graspNode.offset_xyz[0];
-                    targetY = graspNode.offset_xyz[1];
-                    targetZ = graspNode.offset_xyz[2];
+            // Drop-off 區域 (右側)
+            let dropX = 0.6;
+            
+            // 遍歷所有 Sequence 子任務
+            for (let i = 0; i < btData.Nodes.length; i++) {
+                const task = btData.Nodes[i];
+                if (!task.Nodes) continue;
+
+                const graspNode = task.Nodes.find(n => n.Node === "FindGraspPoint");
+                if (!graspNode) continue;
+
+                const targetId = graspNode.Target;
+                const offset = graspNode.offset_xyz || [0, 0, 0];
+                const targetObj = environmentObjects[targetId];
+
+                if (!targetObj) {
+                    console.warn("找不到物件: " + targetId);
+                    continue;
                 }
+
+                updateStatus(`[${i+1}/${btData.Nodes.length}] APPROACHING: ${targetId}`);
+                
+                // 1. 移動至正上方
+                await moveGripper(offset[0], 0.8, offset[2], 0.05);
+                // 2. 下降
+                await moveGripper(offset[0], offset[1], offset[2], 0.02);
+
+                updateStatus(`[${i+1}/${btData.Nodes.length}] GRASPING...`);
+                await sleep(400);
+                
+                // 使用 LockConstraint (剛性鎖定)，消除晃動
+                graspConstraint = new CANNON.LockConstraint(gripperBody, targetObj.body);
+                world.addConstraint(graspConstraint);
+                await sleep(200);
+
+                updateStatus(`[${i+1}/${btData.Nodes.length}] LIFTING...`);
+                await moveGripper(offset[0], 0.8, offset[2], 0.03);
+
+                updateStatus(`[${i+1}/${btData.Nodes.length}] MOVING TO DROP ZONE...`);
+                await moveGripper(dropX, 0.8, 0, 0.05);
+
+                updateStatus(`[${i+1}/${btData.Nodes.length}] LOWERING TO PLACE...`);
+                // 3. 放下至桌面高度，避免自由落體砸壞
+                await moveGripper(dropX, 0.2, 0, 0.03);
+
+                updateStatus(`[${i+1}/${btData.Nodes.length}] RELEASING...`);
+                world.removeConstraint(graspConstraint);
+                graspConstraint = null;
+                await sleep(300);
+
+                // 退回高空
+                await moveGripper(dropX, 0.8, 0, 0.05);
+                
+                // 錯開放置位置，避免下一個物件砸到前一個
+                dropX += 0.2; 
             }
 
-            // 執行管線指令
-            updateStatus("STATE: APPROACHING...");
-            await moveGripper(targetX, 1.0, targetZ, 0.05); // 移至正上方
-            await moveGripper(targetX, targetY, targetZ, 0.02); // 緩慢下降
-
-            updateStatus("STATE: CLOSING GRIPPER...");
-            await sleep(500);
-            // 建立物理約束 (Point-to-Point 模擬夾持)
-            graspConstraint = new CANNON.PointToPointConstraint(
-                gripperBody, new CANNON.Vec3(0, -0.15, 0),
-                targetBody, new CANNON.Vec3(0, 0, 0)
-            );
-            world.addConstraint(graspConstraint);
-            await sleep(500);
-
-            updateStatus("STATE: EXTRACTING...");
-            await moveGripper(targetX, 1.2, targetZ, 0.02); // 垂直拉起
-
-            updateStatus("STATE: MOVING TO DROP-OFF...");
-            await moveGripper(1.0, 1.2, 0, 0.05); // 移至放置區
-
-            updateStatus("STATE: OPENING GRIPPER...");
-            await sleep(500);
-            world.removeConstraint(graspConstraint); // 釋放約束，重力接管
-            graspConstraint = null;
-            await sleep(1000);
-
-            updateStatus("STATE: RESETTING...");
+            updateStatus("STATE: ALL TASKS ACCOMPLISHED (BIN EMPTY)");
             await moveGripper(0, 1.5, 0, 0.05);
             
-            updateStatus("STATE: MISSION ACCOMPLISHED");
         } catch (e) {
             updateStatus("ERROR: " + e.message);
         } finally {
             isExecuting = false;
-            document.getElementById('runBtn').disabled = false;
         }
     }
 
-    // 運動學平滑插值函式
     function moveGripper(x, y, z, speed) {
         return new Promise(resolve => {
             const target = new CANNON.Vec3(x, y, z);
             const interval = setInterval(() => {
                 const diff = target.vsub(gripperTargetPos);
-                if (diff.length() < 0.05) {
+                if (diff.length() < 0.02) {
                     gripperTargetPos.copy(target);
                     clearInterval(interval);
                     resolve();
@@ -255,20 +306,18 @@
     function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     function updateStatus(msg) { document.getElementById('statusDisplay').innerText = msg; }
 
-    // --- 渲染與物理同步迴圈 ---
     function animate() {
-        animationId = requestAnimationFrame(animate);
-        
-        // 物理引擎步進
+        requestAnimationFrame(animate);
         world.step(1 / 60);
 
-        // 同步物理 Body 至 Three.js Mesh
-        for (let i = 0; i < meshes.length; i++) {
-            meshes[i].position.copy(bodies[i].position);
-            meshes[i].quaternion.copy(bodies[i].quaternion);
+        // 同步所有環境物件的 物理 -> 視覺
+        for (let key in environmentObjects) {
+            const obj = environmentObjects[key];
+            obj.mesh.position.copy(obj.body.position);
+            obj.mesh.quaternion.copy(obj.body.quaternion);
         }
 
-        // 獨立更新夾爪 (Kinematic)
+        // 更新夾爪
         gripperBody.position.copy(gripperTargetPos);
         gripperMesh.position.copy(gripperBody.position);
         gripperMesh.quaternion.copy(gripperBody.quaternion);
