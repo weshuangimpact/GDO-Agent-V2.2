@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 系統 v4.0 (管線主程式) - WesmartAI</title>
+    <title>GDO 系統 v4.2.4 (管線主程式) - WesmartAI</title>
     <style>
         :root { 
             --primary: #004494; --sidebar-bg: #003399; --bg: #f4f6f8; 
@@ -23,7 +23,7 @@
         .full-width { grid-column: span 2; }
         h2.panel-title { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
-        input[type="text"], input[type="password"], input[type="file"], input[type="number"], textarea.input-box { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        input[type="text"], input[type="password"], input[type="file"], input[type="number"], select, textarea.input-box { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
         button { background: var(--primary); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.3s; font-size: 0.85rem; }
         button:hover { background: #002244; }
         button:disabled { background: #cccccc; cursor: not-allowed; }
@@ -46,13 +46,13 @@
 <div class="sidebar">
     <h1>WesmartAI</h1>
     <h2>可信智慧整合有限公司</h2>
-    <h3>GDO 系統 v4.0<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(邏輯管線主程式)</span></h3>
+    <h3>GDO 系統 v4.2.4<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(邏輯管線主程式)</span></h3>
     <div class="btn-demo">系統狀態: 待機中</div>
     <div class="changelog">
-        v4.0 變更:<br>
-        · 模組化解耦：渲染引擎獨立分離<br>
-        · 新增跨分頁預覽連結機制<br>
-        · 優化主程式記憶體佔用<br>
+        v4.2.4 變更:<br>
+        · 補齊配置面板缺失參數<br>
+        · 新增 Gemini 模型選擇欄位<br>
+        · 恢復 Original BT 語意參考點<br>
     </div>
 </div>
 
@@ -63,16 +63,30 @@
             <h2 class="panel-title">1. 系統配置與環境輸入</h2>
             <label>Gemini API Key:</label>
             <input type="password" id="apiKey" placeholder="輸入 Google AI Studio API Key">
+            
+            <label>Gemini Model:</label>
+            <select id="geminiModel">
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+            </select>
+
             <div class="file-row">
                 <div><label>視覺影像 (RGB):</label><input type="file" id="imageInput" accept="image/*"></div>
                 <div><label>深度圖 (Depth):</label><input type="file" id="depthInput"></div>
             </div>
+            
             <label>人類語意目標 (Goal):</label>
             <textarea id="semanticGoal" class="input-box" rows="2">鎖定中央藍色圓柱體，優化作業節拍，精確計算進入角度避免邊緣擦撞。</textarea>
+            
             <label>物理邊界限制 (Constraints):</label>
             <textarea id="constraints" class="input-box" rows="2">{"max_approach_velocity": 0.5, "end_effector_type": "parallel_gripper"}</textarea>
+            
             <label>自訂治理裁決規則 (Custom Rules):</label>
             <textarea id="customRules" class="input-box" rows="2">{"required_nodes": ["FindGraspPoint", "CloseGripper"]}</textarea>
+            
+            <label>原始行為樹 (Original BT):</label>
+            <textarea id="originalBt" class="input-box" rows="2">{"Action": "Sequence", "Nodes": [{"Node": "FindGraspPoint"}]}</textarea>
             
             <button id="stopBtn" class="btn-stop" onclick="emergencyStop()">緊急停止 (E-Stop)</button>
         </div>
@@ -113,7 +127,6 @@
                 <textarea id="outCandidate" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
                 <div class="btn-group">
                     <button onclick="runAiStep(4)">🤖 呼叫 AI 生成</button>
-                    <!-- V4.0 修改：導向獨立分頁 -->
                     <button class="btn-secondary" onclick="openPreviewPage()">👁️ 開啟動態沙盒預覽 (新分頁)</button>
                     <button class="btn-success" onclick="proceedToStep(5)">✅ 確認並提交治理裁決 (Step 5)</button>
                 </div>
@@ -166,9 +179,10 @@
     // --- Gemini Native API Call ---
     async function callGemini(prompt, imgBase64 = null) {
         const apiKey = document.getElementById('apiKey').value;
+        const model = document.getElementById('geminiModel').value;
         if (!apiKey) throw new Error("未偵測到 API Key，請先輸入。");
         
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         let parts = [{ text: prompt + "\n\n嚴格輸出合法 JSON。" }];
         
         if (imgBase64) {
@@ -209,17 +223,18 @@
                     const res = await callGemini("請分析影像並輸出 environment_entities 與 target_object JSON。", base64);
                     document.getElementById('outVlm').value = JSON.stringify(res, null, 2);
                 } else {
-                    document.getElementById('outVlm').value = '{\n  "environment_entities": [\n    {"id": "central_grey_block", "type": "rectangular_block", "state": "flat_on_bottom"}\n  ],\n  "target_object": {\n    "id": "blue_cylindrical_component",\n    "pose": {"x_normalized": {"estimate": 0.42}, "y_normalized": {"estimate": 0.50}, "z_normalized": {"estimate": 0.65}}\n  }\n}';
+                    document.getElementById('outVlm').value = '{\n  "environment_entities": [\n    {"id": "central_t_assembly", "type": "compound_block", "state": "flat_on_bottom"}\n  ],\n  "target_object": {\n    "id": "central_t_assembly"\n  }\n}';
                 }
             } else if (step === 2) {
                 getEditorJson('outVlm');
-                document.getElementById('outUnderstanding').value = '{\n  "task_summary": "提取藍色圓柱元件",\n  "potential_failure_modes": [\n    {"id": "FM-001", "description": "夾爪進入角度過大導致邊緣擦撞", "severity": "high"}\n  ]\n}';
+                document.getElementById('outUnderstanding').value = '{\n  "task_summary": "提取中央 T 型元件",\n  "potential_failure_modes": [\n    {"id": "FM-001", "description": "周圍障礙物干涉導致抓取失敗", "severity": "high"}\n  ]\n}';
             } else if (step === 3) {
                 getEditorJson('outUnderstanding');
-                document.getElementById('outPlan').value = '{\n  "exploration_strategy": "針對 Z 軸進入角度進行微調，降低擦撞機率。",\n  "simulation_cases": [\n    {"case_id": "SIM_01", "approach_speed": 0.1, "grip_force": 40}\n  ]\n}';
+                document.getElementById('outPlan').value = '{\n  "exploration_strategy": "分階段移除周圍干涉物後，再抓取中央目標。",\n  "simulation_cases": [\n    {"case_id": "SIM_01", "approach_speed": 0.1, "grip_force": 40}\n  ]\n}';
             } else if (step === 4) {
                 getEditorJson('outPlan');
-                document.getElementById('outCandidate').value = '{\n  "modification_rationale": "為避免邊緣擦撞，鎖定中央藍色圓柱體，設定空間夾持座標 [-0.2, 0.2, 0.15] 與垂直 Z 軸下降向量。",\n  "Action": "Sequence",\n  "Nodes": [\n    {\n      "Node": "FindGraspPoint",\n      "Target": "blue_cylindrical_component",\n      "Method": "AntipodalSampler",\n      "offset_xyz": [-0.2, 0.2, 0.15]\n    },\n    {\n      "Node": "AlignApproachVector",\n      "axis": "z",\n      "Vector": [0, 0, -1]\n    },\n    {\n      "Node": "ApproachObject",\n      "Target": "blue_cylindrical_component",\n      "approach_speed": 0.1\n    },\n    {\n      "Node": "CloseGripper",\n      "grip_force": 40\n    }\n  ]\n}';
+                // 預設輸出相容於 4.2.3 沙盒的三組物件夾取排程
+                document.getElementById('outCandidate').value = '{\n  "Action": "Sequence",\n  "Nodes": [\n    {\n      "Node": "Sequence",\n      "Nodes": [\n        {\n          "Node": "FindGraspPoint",\n          "Target": "shaft_top",\n          "offset_xyz": [0, 0.05, -0.38],\n          "rot_euler": [0, 1.57, 0],\n          "drop_xyz": [-0.9, 0.15, -0.3]\n        }\n      ]\n    },\n    {\n      "Node": "Sequence",\n      "Nodes": [\n        {\n          "Node": "FindGraspPoint",\n          "Target": "gear_top_left",\n          "offset_xyz": [-0.4, 0.05, -0.28],\n          "rot_euler": [0, 0, 0],\n          "drop_xyz": [-0.9, 0.15, 0.1]\n        }\n      ]\n    },\n    {\n      "Node": "Sequence",\n      "Nodes": [\n        {\n          "Node": "FindGraspPoint",\n          "Target": "central_t_assembly",\n          "offset_xyz": [0, 0.15, 0],\n          "rot_euler": [0, 1.57, 0],\n          "drop_xyz": [0.9, 0.15, 0]\n        }\n      ]\n    }\n  ]\n}';
             }
         } catch(e) {
             alert(`Step ${step} 執行失敗: ${e.message}`);
@@ -262,14 +277,10 @@
         document.getElementById('outIsaac').innerText = "連線至 Isaac 叢集... 模擬完成。";
     }
 
-    // --- V4.0 新增：跨分頁預覽機制 ---
     function openPreviewPage() {
         try {
-            // 確保留在編輯區的代碼是合法的 JSON
             const btJson = getEditorJson('outCandidate');
-            // 將最新狀態寫入瀏覽器本地暫存，供 preview.html 讀取
             localStorage.setItem('gdo_candidate_bt', JSON.stringify(btJson));
-            // 開啟新分頁
             window.open('preview.html', '_blank');
         } catch (e) {
             alert("開啟失敗：請確保 Step 4 有合法的 JSON 產出。\n" + e.message);
