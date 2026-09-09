@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox) v4.2.1</title>
+    <title>GDO 動態沙盒預覽 (Kinematic & Physics Sandbox) v4.2.2 - fixed</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
@@ -18,15 +18,27 @@
         .status { padding: 5px 10px; background: #000; border-radius: 4px; font-size: 0.9rem; color: #00ff00; min-width: 250px; text-align: center; }
         .main-view { display: flex; flex-grow: 1; height: calc(100vh - 60px); }
         #canvas-container { flex-grow: 1; position: relative; }
-        .sidebar { width: 400px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 10px; background: #222; border-bottom: 1px solid #444; font-weight: bold; font-size: 0.9rem; }
+        .sidebar { width: 420px; background: var(--panel); border-left: 1px solid #444; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 10px; background: #222; border-bottom: 1px solid #444; font-weight: bold; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+        .sidebar-header .hint { font-weight: normal; color: #888; font-size: 0.75rem; }
         pre { margin: 0; padding: 15px; overflow-y: auto; font-size: 0.8rem; color: #9cdcfe; flex-grow: 1; white-space: pre-wrap; }
+        #btInput {
+            width: 100%; box-sizing: border-box; height: 160px; resize: vertical;
+            background: #1a1a1a; color: #ce9178; border: 1px solid #444; font-family: monospace;
+            font-size: 0.78rem; padding: 10px;
+        }
+        .input-panel { padding: 10px; border-bottom: 1px solid #444; display: flex; flex-direction: column; gap: 8px; }
+        .input-panel .row { display: flex; gap: 8px; }
+        .input-panel button { flex: 1; }
+        #loadMsg { font-size: 0.75rem; min-height: 1em; }
+        #loadMsg.error { color: #ff6b6b; }
+        #loadMsg.ok { color: #6bff8f; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>GDO 幾何預覽與物理驗證沙盒 (v4.2.1 - 姿態與干涉修復版)</h1>
+    <h1>GDO 幾何預覽與物理驗證沙盒 (v4.2.2 - 姿態/干涉/資料載入修復版)</h1>
     <div class="controls">
         <div id="statusDisplay" class="status">STATE: IDLE</div>
         <button id="runBtn" onclick="executeBT()">▶️ 執行全自動排程</button>
@@ -37,7 +49,18 @@
 <div class="main-view">
     <div id="canvas-container"></div>
     <div class="sidebar">
-        <div class="sidebar-header">接收的 Candidate BT (JSON)</div>
+        <div class="input-panel">
+            <div class="sidebar-header" style="padding:0; background:none; border:none;">
+                貼上 Candidate BT (JSON) <span class="hint">會存入 localStorage 並套用</span>
+            </div>
+            <textarea id="btInput" spellcheck="false" placeholder="貼上 BT JSON..."></textarea>
+            <div class="row">
+                <button onclick="applyBTFromTextarea()">✅ 套用 JSON</button>
+                <button onclick="clearStoredBT()" style="background:#666;">🗑️ 清除已存資料</button>
+            </div>
+            <div id="loadMsg"></div>
+        </div>
+        <div class="sidebar-header">目前使用中的 BT (唯讀)</div>
         <pre id="jsonDisplay">等待資料載入...</pre>
     </div>
 </div>
@@ -51,6 +74,11 @@
     let btData = null;
     let gripperTargetPos = new CANNON.Vec3(0, 1.5, 0);
     let gripperTargetQuat = new CANNON.Quaternion(); 
+
+    // Top surface of the finite "bin" floor box (see createBinBoundary: y=0.01, height=0.02 -> top = 0.02).
+    // Object placement Y values below are authored as (BIN_FLOOR_TOP + object's own resting half-extent)
+    // so objects start sitting ON the floor instead of partially embedded in it.
+    const BIN_FLOOR_TOP = 0.02;
 
     init();
     animate();
@@ -121,32 +149,40 @@
         const shaftMat = 0xaaaaaa;
         const springMat = 0x555555;
 
-        // A. 齒輪 (Gears) - 高度 0.03，Y軸設為 0.015
+        // A. 齒輪 (Gears) - 半高 0.015 -> 貼地 Y = BIN_FLOOR_TOP + 0.015
         const gearGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.03, 32);
         const gearShape = new CANNON.Cylinder(0.12, 0.12, 0.03, 16);
-        createPhysicalObject("gear_top_left", gearGeom, gearShape, gearMat, new CANNON.Vec3(-0.4, 0.015, -0.28), 2, true);
-        createPhysicalObject("gear_bottom_left", gearGeom, gearShape, gearMat, new CANNON.Vec3(-0.4, 0.015, 0.28), 2, true);
-        createPhysicalObject("gear_top_right", gearGeom, gearShape, gearMat, new CANNON.Vec3(0.4, 0.015, -0.28), 2, true);
+        createPhysicalObject("gear_top_left", gearGeom, gearShape, gearMat, new CANNON.Vec3(-0.4, BIN_FLOOR_TOP + 0.015, -0.28), 2, true);
+        createPhysicalObject("gear_bottom_left", gearGeom, gearShape, gearMat, new CANNON.Vec3(-0.4, BIN_FLOOR_TOP + 0.015, 0.28), 2, true);
+        createPhysicalObject("gear_top_right", gearGeom, gearShape, gearMat, new CANNON.Vec3(0.4, BIN_FLOOR_TOP + 0.015, -0.28), 2, true);
 
-        // B. 金屬圓軸 (Shafts) - 半徑 0.025，Y軸設為 0.025
+        // B. 金屬圓軸 (Shafts) - 躺平時貼地高度 = 半徑 0.025 -> Y = BIN_FLOOR_TOP + 0.025
         const shaftGeom = new THREE.CylinderGeometry(0.025, 0.025, 0.4, 16);
         const shaftShape = new CANNON.Cylinder(0.025, 0.025, 0.4, 12);
-        createPhysicalObject("shaft_top", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.0, 0.025, -0.38), 1.5, true, [0, 0, Math.PI/2]);
-        createPhysicalObject("shaft_bottom", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.0, 0.025, 0.38), 1.5, true, [0, 0, Math.PI/2]);
-        createPhysicalObject("shaft_right", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.42, 0.025, 0.1), 1.5, true, [Math.PI/2, 0, 0]);
+        createPhysicalObject("shaft_top", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.0, BIN_FLOOR_TOP + 0.025, -0.38), 1.5, true, [0, 0, Math.PI/2]);
+        createPhysicalObject("shaft_bottom", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.0, BIN_FLOOR_TOP + 0.025, 0.38), 1.5, true, [0, 0, Math.PI/2]);
+        createPhysicalObject("shaft_right", shaftGeom, shaftShape, shaftMat, new CANNON.Vec3(0.42, BIN_FLOOR_TOP + 0.025, 0.1), 1.5, true, [Math.PI/2, 0, 0]);
 
-        // C. 彈簧 (Springs) - 半徑 0.04，Y軸設為 0.04
+        // C. 彈簧 (Springs) - 半徑 0.04 -> Y = BIN_FLOOR_TOP + 0.04
         const springGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.25, 16);
         const springShape = new CANNON.Cylinder(0.04, 0.04, 0.25, 12);
-        createPhysicalObject("spring_top_left", springGeom, springShape, springMat, new CANNON.Vec3(-0.18, 0.04, -0.15), 1, true, [Math.PI/2, Math.PI/4, 0]);
-        createPhysicalObject("spring_bottom_left", springGeom, springShape, springMat, new CANNON.Vec3(-0.18, 0.04, 0.15), 1, true, [Math.PI/2, -Math.PI/4, 0]);
-        createPhysicalObject("spring_top_right", springGeom, springShape, springMat, new CANNON.Vec3(0.22, 0.04, -0.15), 1, true, [Math.PI/2, -Math.PI/4, 0]);
-        createPhysicalObject("spring_bottom_center", springGeom, springShape, springMat, new CANNON.Vec3(0.1, 0.04, 0.22), 1, true, [0, 0, Math.PI/2]);
+        createPhysicalObject("spring_top_left", springGeom, springShape, springMat, new CANNON.Vec3(-0.18, BIN_FLOOR_TOP + 0.04, -0.15), 1, true, [Math.PI/2, Math.PI/4, 0]);
+        createPhysicalObject("spring_bottom_left", springGeom, springShape, springMat, new CANNON.Vec3(-0.18, BIN_FLOOR_TOP + 0.04, 0.15), 1, true, [Math.PI/2, -Math.PI/4, 0]);
+        createPhysicalObject("spring_top_right", springGeom, springShape, springMat, new CANNON.Vec3(0.22, BIN_FLOOR_TOP + 0.04, -0.15), 1, true, [Math.PI/2, -Math.PI/4, 0]);
+        createPhysicalObject("spring_bottom_center", springGeom, springShape, springMat, new CANNON.Vec3(0.1, BIN_FLOOR_TOP + 0.04, 0.22), 1, true, [0, 0, Math.PI/2]);
 
-        // D. 中央 T 形組合件
+        // D. 中央 T 形組合件 - 主箱體半高 0.1 -> Y = BIN_FLOOR_TOP + 0.1
         createCompoundObject("central_t_assembly");
     }
 
+    // FIX: 原本這裡算出的 quat（eulerRot 疊加圓柱體軸向補償 baseQuat）只丟進 body.addShape()
+    // 當作「shape 相對 body 的局部偏移」，卻從未指派給 body.quaternion 本身。
+    // body.quaternion 預設是單位四元數，而渲染迴圈是用 mesh.quaternion.copy(body.quaternion)，
+    // 結果視覺上的網格完全沒有套用到 eulerRot（軸、彈簧看起來會是直立，而不是設定的角度）；
+    // 物理上，body 座標系（單位姿態）跟其上掛的、真正帶有偏移旋轉的 shape 從一開始就互相矛盾，
+    // solver 從第一影格就會開始施加修正扭矩，導致模擬幾秒內物件被慢慢「扳」到不可預期的姿態
+    // （實測 shaft_top 在 setting 3 秒後，軸向從「躺平」被轉到接近直立）。
+    // 修法：把算好的旋轉直接指派給 body.quaternion，shape 本身不再帶額外的局部偏移。
     function createPhysicalObject(id, geometry, shape, color, position, mass, isCylinder = false, eulerRot = [0,0,0]) {
         const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: color }));
         mesh.castShadow = true;
@@ -161,8 +197,9 @@
             baseQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
             quat.mult(baseQuat, quat); 
         }
-        
-        body.addShape(shape, new CANNON.Vec3(0,0,0), quat);
+
+        body.quaternion.copy(quat);                 // <-- FIX: apply the computed rotation to the body itself
+        body.addShape(shape, new CANNON.Vec3(0, 0, 0)); // shape now has no extra local-offset rotation
         body.position.copy(position);
         world.addBody(body);
         
@@ -180,7 +217,8 @@
         cylQuat.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), Math.PI / 2);
         compBody.addShape(cylShape, new CANNON.Vec3(-0.05, 0, 0), cylQuat);
 
-        compBody.position.set(0, 0.1, 0);
+        // FIX: 原本 y=0.1，箱體半高也是 0.1，代表底部剛好在 y=0（floor 頂面其實在 BIN_FLOOR_TOP=0.02），會卡進地板。
+        compBody.position.set(0, BIN_FLOOR_TOP + 0.1, 0);
         world.addBody(compBody);
 
         const group = new THREE.Group();
@@ -223,31 +261,74 @@
         world.addBody(gripperBody);
     }
 
+    // ---- BT 資料載入 / 套用 ----
+
+    function defaultBTData() {
+        return {
+            "Action": "Sequence",
+            "Nodes": [
+                {
+                    "Node": "Sequence",
+                    "Nodes": [
+                        {
+                            "Node": "FindGraspPoint",
+                            "Target": "shaft_top",
+                            "offset_xyz": [0, 0.05, -0.35],
+                            "rot_euler": [0, 1.57, 0],
+                            "drop_xyz": [-0.9, 0.15, -0.3]
+                        }
+                    ]
+                }
+            ]
+        };
+    }
+
     function loadBTData() {
         const rawData = localStorage.getItem('gdo_candidate_bt');
         if (rawData) {
-            btData = JSON.parse(rawData);
-            document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
+            try {
+                btData = JSON.parse(rawData);
+            } catch (e) {
+                console.warn('localStorage 內的 gdo_candidate_bt 不是合法 JSON，改用預設資料。', e);
+                btData = defaultBTData();
+            }
         } else {
-            btData = {
-                "Action": "Sequence",
-                "Nodes": [
-                    {
-                        "Node": "Sequence",
-                        "Nodes": [
-                            {
-                                "Node": "FindGraspPoint",
-                                "Target": "shaft_top",
-                                "offset_xyz": [0, 0.05, -0.35],
-                                "rot_euler": [0, 1.57, 0],
-                                "drop_xyz": [-0.9, 0.15, -0.3]
-                            }
-                        ]
-                    }
-                ]
-            };
-            document.getElementById('jsonDisplay').innerText = "// 尚未接收到外部資料，載入展示用預設 BT\n" + JSON.stringify(btData, null, 2);
+            btData = defaultBTData();
         }
+        document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
+        document.getElementById('btInput').value = JSON.stringify(btData, null, 2);
+    }
+
+    // FIX: 新增這一段 UI，讓貼在 textarea 裡的 JSON 真的會被拿去執行 —
+    // 原本頁面只吃 localStorage，貼進去的 JSON 若沒有手動 localStorage.setItem() 是完全不會被用到的。
+    function applyBTFromTextarea() {
+        const msgEl = document.getElementById('loadMsg');
+        const raw = document.getElementById('btInput').value;
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (e) {
+            msgEl.textContent = 'JSON 解析失敗：' + e.message;
+            msgEl.className = 'error';
+            return;
+        }
+        if (!parsed || !Array.isArray(parsed.Nodes)) {
+            msgEl.textContent = '格式錯誤：頂層物件需要有一個陣列欄位 "Nodes"。';
+            msgEl.className = 'error';
+            return;
+        }
+        btData = parsed;
+        localStorage.setItem('gdo_candidate_bt', JSON.stringify(parsed));
+        document.getElementById('jsonDisplay').innerText = JSON.stringify(btData, null, 2);
+        msgEl.textContent = '已套用，共 ' + btData.Nodes.length + ' 個任務。按「執行全自動排程」開始。';
+        msgEl.className = 'ok';
+    }
+
+    function clearStoredBT() {
+        localStorage.removeItem('gdo_candidate_bt');
+        const msgEl = document.getElementById('loadMsg');
+        msgEl.textContent = '已清除，重新整理頁面將改用內建預設資料。';
+        msgEl.className = 'ok';
     }
 
     async function executeBT() {
