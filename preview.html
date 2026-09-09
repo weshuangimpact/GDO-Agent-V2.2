@@ -420,7 +420,7 @@
                     gripperTargetPos.z += diff.z * speed;
                 }
 
-                gripperTargetQuat.slerp(targetQ, 0.15, gripperTargetQuat);
+                slerpQuaternion(gripperTargetQuat, targetQ, 0.15, gripperTargetQuat);
                 
                 const dot = gripperTargetQuat.x * targetQ.x + 
                             gripperTargetQuat.y * targetQ.y + 
@@ -435,6 +435,40 @@
                 }
             }, 16);
         });
+    }
+
+    // FIX (夾具卡住的根因): cannon.js 0.6.2（本頁引用的版本）的 CANNON.Quaternion
+    // 根本沒有 .slerp() 這個方法。原本 moveGripper() 每個 16ms tick 都會呼叫
+    // gripperTargetQuat.slerp(...)，這行會拋出 "slerp is not a function"。
+    // 這個例外發生在 setInterval callback 內部，不會被外層 executeBT() 的 try/catch
+    // 捕捉到，也不會讓 moveGripper 回傳的 Promise reject——它就是單純「每 16ms 丟一次
+    // 例外、永遠執行不到 resolve()」，於是 await moveGripper(...) 永遠卡住，夾具看起來
+    // 就像動到一半突然凍結。這裡補一個手寫的 quaternion slerp（含最短路徑/dot<0 處理）取代它。
+    function slerpQuaternion(qa, qb, t, target) {
+        target = target || new CANNON.Quaternion();
+        let cosHalfTheta = qa.x*qb.x + qa.y*qb.y + qa.z*qb.z + qa.w*qb.w;
+        let bx = qb.x, by = qb.y, bz = qb.z, bw = qb.w;
+        if (cosHalfTheta < 0) {
+            bx = -bx; by = -by; bz = -bz; bw = -bw;
+            cosHalfTheta = -cosHalfTheta;
+        }
+        if (cosHalfTheta >= 1.0) {
+            target.x = qa.x; target.y = qa.y; target.z = qa.z; target.w = qa.w;
+            return target;
+        }
+        const halfTheta = Math.acos(cosHalfTheta);
+        const sinHalfTheta = Math.sqrt(1.0 - cosHalfTheta*cosHalfTheta);
+        if (Math.abs(sinHalfTheta) < 0.001) {
+            target.x = 0.5*(qa.x+bx); target.y = 0.5*(qa.y+by);
+            target.z = 0.5*(qa.z+bz); target.w = 0.5*(qa.w+bw);
+            return target;
+        }
+        const ratioA = Math.sin((1 - t) * halfTheta) / sinHalfTheta;
+        const ratioB = Math.sin(t * halfTheta) / sinHalfTheta;
+        target.x = qa.x*ratioA + bx*ratioB; target.y = qa.y*ratioA + by*ratioB;
+        target.z = qa.z*ratioA + bz*ratioB; target.w = qa.w*ratioA + bw*ratioB;
+        target.normalize();
+        return target;
     }
 
     function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
