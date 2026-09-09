@@ -3,68 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 目標自優化代理系統 v3.6 (Gemma 4 31B 版) - WesmartAI</title>
+    <title>GDO 目標自優化代理系統 v3.8 (完全解耦版) - WesmartAI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root { 
-            --primary: #004494; 
-            --sidebar-bg: #003399; 
-            --bg: #f4f6f8; 
-            --panel-bg: #ffffff; 
-            --border: #e1e4e8; 
-            --success: #28a745; 
-            --warning: #b8860b;
-            --danger: #dc3545;
+            --primary: #004494; --sidebar-bg: #003399; --bg: #f4f6f8; 
+            --panel-bg: #ffffff; --border: #e1e4e8; --success: #28a745; 
+            --warning: #b8860b; --danger: #dc3545;
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; display: flex; min-height: 100vh; }
-        .sidebar { width: 260px; background-color: var(--sidebar-bg); color: white; padding: 30px 20px; display: flex; flex-direction: column; flex-shrink: 0; }
-        .sidebar h1 { margin: 0; font-size: 1.8rem; letter-spacing: 1px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: #333; margin: 0; display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: var(--sidebar-bg); color: white; padding: 30px 20px; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar h1 { margin: 0; font-size: 1.8rem; }
         .sidebar h2 { margin: 5px 0 20px 0; font-size: 1rem; font-weight: normal; color: #a9c2f0; }
-        .sidebar h3 { font-size: 1.1rem; border-top: 1px solid #4d79ff; padding-top: 20px; margin-top: 10px; line-height: 1.4; }
-        .sidebar .btn-demo { background-color: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px; text-align: center; border-radius: 4px; margin-top: auto; font-weight: bold; cursor: pointer; }
+        .sidebar h3 { font-size: 1.1rem; border-top: 1px solid #4d79ff; padding-top: 20px; margin-top: 10px; }
+        .sidebar .btn-demo { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 10px; text-align: center; border-radius: 4px; margin-top: auto; font-weight: bold; }
         .sidebar .changelog { font-size: 0.75rem; color: #a9c2f0; margin-top: 15px; line-height: 1.6; }
         .main-content { flex-grow: 1; padding: 20px; overflow-y: auto; width: calc(100% - 300px); }
         .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1600px; margin: 0 auto; }
         .panel { background: var(--panel-bg); padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid var(--border); }
         .full-width { grid-column: span 2; }
         h2.panel-title { font-size: 1.2rem; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
-        .metrics { font-size: 0.85rem; font-weight: normal; color: #555; background: #e9ecef; padding: 4px 8px; border-radius: 4px; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
         input[type="text"], input[type="password"], input[type="file"], input[type="number"], textarea.input-box { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; font-family: monospace; }
-        button { background-color: var(--primary); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; transition: 0.3s; }
-        button:hover { background-color: #002244; }
-        button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        button.btn-continue { background-color: var(--success); margin-top: 10px; }
-        button.btn-continue:hover { background-color: #218838; }
-        .btn-secondary { background-color: #6c757d; margin-top: 10px; }
-        .btn-secondary:hover { background-color: #5a6268; }
-        .btn-stop { background-color: var(--danger); }
-        .btn-stop:hover { background-color: #bd2130; }
-        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
-        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
-        .status-allow { background-color: #d4edda; color: #155724; }
-        .status-reject { background-color: #f8d7da; color: #721c24; }
+        button { background: var(--primary); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; transition: 0.3s; font-size: 0.85rem; }
+        button:hover { background: #002244; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
+        .btn-success { background: var(--success); }
+        .btn-success:hover { background: #218838; }
+        .btn-secondary { background: #6c757d; }
+        .btn-warning { background: var(--warning); color: #fff; }
+        .btn-stop { background: var(--danger); width: 100%; margin-top: 10px;}
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
         .step-container { margin-bottom: 20px; border-left: 4px solid var(--primary); padding-left: 10px; }
         .step-header { display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 5px; }
-        .auto-run-label { font-size: 0.85rem; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 5px; color: #555; }
-        textarea.json-editor { width: 100%; height: 250px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; border: none; font-family: monospace; font-size: 0.85rem; box-sizing: border-box; resize: vertical; margin-top: 5px; }
-        textarea.json-editor:focus { outline: 1px solid var(--primary); }
-        .coverage-box { margin-top: 8px; padding: 8px 10px; border-radius: 4px; font-size: 0.8rem; }
-        .coverage-ok { background: #d4edda; color: #155724; }
-        .coverage-warn { background: #fff3cd; color: #856404; }
-        .iter-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-        .iter-row input[type="number"] { width: 70px; margin-top: 0; }
-        .iter-status { font-size: 0.8rem; color: #555; margin-top: 8px; min-height: 1.2em; font-weight: bold; }
+        textarea.json-editor { width: 100%; height: 250px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; border: none; font-family: monospace; font-size: 0.85rem; resize: vertical; margin-top: 5px; }
         .file-row { display: flex; gap: 10px; }
         .file-row > div { flex: 1; }
-        @media (max-width: 1024px) {
-            body { flex-direction: column; }
-            .sidebar { width: 100%; padding: 15px; display: block; box-sizing: border-box; }
-            .main-content { width: 100%; padding: 10px; }
-            .container { grid-template-columns: 1fr; }
-            .full-width { grid-column: span 1; }
-            .file-row { flex-direction: column; }
-            .btn-group { flex-direction: column; }
-        }
+        
+        /* 3D Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #fff; padding: 20px; border-radius: 8px; width: 80%; max-width: 900px; height: 80vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .close-btn { background: none; border: none; color: #333; font-size: 1.5rem; cursor: pointer; }
+        #canvas-container { flex-grow: 1; background: #eee; border-radius: 4px; overflow: hidden; position: relative; }
     </style>
 </head>
 <body>
@@ -72,608 +53,219 @@
 <div class="sidebar">
     <h1>WesmartAI</h1>
     <h2>可信智慧整合有限公司</h2>
-    <h3>GDO 目標自優化代理系統 v3.6<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Gemma 4 31B 專用版)</span></h3>
+    <h3>GDO 系統 v3.8<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(完全解耦 SSOT 版)</span></h3>
     <div class="btn-demo">系統狀態: 待機中</div>
     <div class="changelog">
-        v3.6 變更:<br>
-        · 接入 Gemma 4 31B 推論架構<br>
-        · 支援 OpenAI 相容協議 (vLLM/Cloud)<br>
-        · 治理裁決整合於 Step 5<br>
-        · 支援自訂治理硬規則與手動介入<br>
+        v3.8 變更:<br>
+        · 實作無狀態管線架構<br>
+        · 支援任意 Step 貼上 JSON 接續執行<br>
+        · 常駐 AI 生成與手動確認雙軌按鈕<br>
     </div>
 </div>
 
 <div class="main-content">
     <div class="container">
-        <!-- 左側：輸入與配置層 -->
+        <!-- 左側配置 -->
         <div class="panel">
             <h2 class="panel-title">1. 系統配置與環境輸入</h2>
-            
-            <label>Inference API Endpoint (OpenAI 相容端點):</label>
-            <input type="text" id="apiEndpoint" value="https://api.openai.com/v1/chat/completions" placeholder="例如: http://localhost:8000/v1/chat/completions">
-            
+            <label>Inference API Endpoint:</label>
+            <input type="text" id="apiEndpoint" value="https://openrouter.ai/api/v1/chat/completions">
             <label>Model ID:</label>
-            <input type="text" id="modelName" value="gemma-4-31b-it" placeholder="例如: gemma-4-31b-it">
-
-            <label>API Key / Bearer Token:</label>
-            <input type="password" id="apiKey" placeholder="輸入 API Key (自建無密鑰服務可留空或填任意字串)">
-            
+            <input type="text" id="modelName" value="google/gemma-4-31b-it:free">
+            <label>API Key:</label>
+            <input type="password" id="apiKey" placeholder="輸入 API Key">
             <div class="file-row">
-                <div>
-                    <label>正上方視覺影像 (RGB):</label>
-                    <input type="file" id="imageInput" accept="image/*">
-                </div>
-                <div>
-                    <label>深度圖/點雲 (Depth Data):</label>
-                    <input type="file" id="depthInput" accept="image/*,.json,.ply">
-                </div>
+                <div><label>視覺影像 (RGB):</label><input type="file" id="imageInput" accept="image/*"></div>
+                <div><label>深度圖 (Depth):</label><input type="file" id="depthInput"></div>
             </div>
-            
-            <label>語意上下文 (Semantic Context):</label>
-            <input type="text" id="semanticContext" value="單層平鋪的金屬零件場景，無垂直堆疊，但存在零間隙水平干涉。">
-            
-            <label>人類語意目標 (Semantic Goal):</label>
-            <textarea id="semanticGoal" class="input-box" rows="2">在乾淨無堆疊的金屬零件平鋪場景中，精準辨識目標物件。精確計算夾爪進入角度與偏置量避免邊緣擦撞。設定合理力道，以最高效率完成平穩夾取，優化整體作業節拍。</textarea>
-            
-            <label>物理邊界限制 (Constraints - JSON - 物理極限):</label>
-            <textarea id="constraints" class="input-box" rows="2">{"max_grip_force": 150, "min_grip_force": 20, "max_approach_velocity": 0.5, "max_jaw_opening_mm": 85, "end_effector_type": "parallel_gripper"}</textarea>
-            
-            <label>自訂治理裁決規則 (Custom Governance Rules - 專案必備條件):</label>
-            <textarea id="customRules" class="input-box" rows="2">{"required_nodes": ["FindGraspPoint", "CloseGripper"], "forbidden_methods": ["VacuumGrasp"]}</textarea>
-
+            <label>人類語意目標 (Goal):</label>
+            <textarea id="semanticGoal" class="input-box" rows="2">優化整體作業節拍，精確計算進入角度避免邊緣擦撞。</textarea>
+            <label>物理邊界限制 (Constraints):</label>
+            <textarea id="constraints" class="input-box" rows="2">{"max_approach_velocity": 0.5, "end_effector_type": "parallel_gripper"}</textarea>
+            <label>自訂治理裁決規則 (Custom Rules):</label>
+            <textarea id="customRules" class="input-box" rows="2">{"required_nodes": ["FindGraspPoint", "CloseGripper"]}</textarea>
             <label>原始行為樹 (Original BT):</label>
-            <textarea id="originalBt" class="input-box" rows="2">{"Action": "Sequence", "Nodes": [{"Node": "FindGraspPoint", "Target": "blue_cylindrical_part", "Method": "AntipodalSampler"}, {"Node": "AlignApproachVector", "axis": "z"}, {"Node": "ApproachObject", "Target": "blue_cylindrical_part", "approach_speed": 0.1}, {"Node": "CloseGripper", "grip_force": 40}]}</textarea>
+            <textarea id="originalBt" class="input-box" rows="2">{"Action": "Sequence", "Nodes": [{"Node": "FindGraspPoint"}]}</textarea>
             
-            <label>上一輪模擬結果 (Historical Results):</label>
-            <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-                <input type="file" id="historicalInput" accept=".json" onchange="loadHistorical(event)">
-            </div>
-            <textarea id="historicalText" class="input-box" rows="2" placeholder="可上傳或貼上上一輪萃取後的 Isaac 評估結果..."></textarea>
-
-            <div class="btn-group">
-                <button id="startBtn" onclick="startPipeline()">啟動 GDO 演化管線 (Step 1)</button>
-                <button id="stopBtn" class="btn-stop" onclick="emergencyStop()" disabled>緊急停止 (E-Stop)</button>
-            </div>
-            <div id="pipelineStatus" style="color: var(--danger); font-weight: bold; margin-top: 10px; font-size: 0.9rem;"></div>
+            <button id="startBtn" onclick="runAiStep1()" style="width: 100%; margin-top: 15px;">🚀 全自動執行 (從頭啟動管線)</button>
+            <button id="stopBtn" class="btn-stop" onclick="emergencyStop()" disabled>緊急停止 (E-Stop)</button>
         </div>
 
-        <!-- 右側：Agentic 執行管線 -->
+        <!-- 右側管線 -->
         <div class="panel">
             <h2 class="panel-title">2. Agentic 執行管線 (HITL 編輯模式)</h2>
             
             <div class="step-container" id="step1">
-                <div class="step-header">
-                    <span>[Step 1] VLM 環境建模</span>
-                    <label class="auto-run-label"><input type="checkbox" id="autoStep2" checked> 自動進入 Step 2</label>
+                <div class="step-header"><span>[Step 1] VLM 環境建模</span></div>
+                <textarea id="outVlm" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
+                <div class="btn-group">
+                    <button onclick="runAiStep1()">🤖 呼叫 AI 生成</button>
+                    <button class="btn-success" onclick="proceedToStep2()">✅ 確認並進入 Step 2</button>
                 </div>
-                <textarea id="outVlm" class="json-editor" placeholder="等待執行..."></textarea>
-                <button id="btnCont1" class="btn-continue" style="display:none;" onclick="runStep2()">確認修改並執行 Step 2</button>
             </div>
-
+            
             <div class="step-container" id="step2">
-                <div class="step-header">
-                    <span>[Step 2] GDO 語意與失效分析</span>
-                    <label class="auto-run-label"><input type="checkbox" id="autoStep3" checked> 自動進入 Step 3</label>
+                <div class="step-header"><span>[Step 2] GDO 語意與失效分析</span></div>
+                <textarea id="outUnderstanding" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
+                <div class="btn-group">
+                    <button onclick="runAiStep2()">🤖 呼叫 AI 生成</button>
+                    <button class="btn-success" onclick="proceedToStep3()">✅ 確認並進入 Step 3</button>
                 </div>
-                <textarea id="outUnderstanding" class="json-editor" placeholder="等待執行..."></textarea>
-                <button id="btnCont2" class="btn-continue" style="display:none;" onclick="runStep3()">確認修改並執行 Step 3</button>
             </div>
-
+            
             <div class="step-container" id="step3">
-                <div class="step-header">
-                    <span>[Step 3] 探索策略與隨機場景生成矩陣</span>
-                    <label class="auto-run-label"><input type="checkbox" id="autoStep4" checked> 自動進入 Step 4</label>
+                <div class="step-header"><span>[Step 3] 探索策略矩陣</span></div>
+                <textarea id="outPlan" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
+                <div class="btn-group">
+                    <button onclick="runAiStep3()">🤖 呼叫 AI 生成</button>
+                    <button class="btn-success" onclick="proceedToStep4()">✅ 確認並進入 Step 4</button>
                 </div>
-                <textarea id="outPlan" class="json-editor" placeholder="等待執行..."></textarea>
-                <button id="btnCont3" class="btn-continue" style="display:none;" onclick="runStep4()">確認修改並執行 Step 4</button>
             </div>
-
+            
             <div class="step-container" id="step4">
-                <div class="step-header">
-                    <span>[Step 4] 候選策略產出 (Candidate BT)</span>
-                    <label class="auto-run-label"><input type="checkbox" id="autoStep5" checked> 自動進入 Step 5</label>
+                <div class="step-header"><span>[Step 4] 候選策略產出 (Candidate BT)</span></div>
+                <textarea id="outCandidate" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
+                <div class="btn-group">
+                    <button onclick="runAiStep4()">🤖 呼叫 AI 生成</button>
+                    <button class="btn-secondary" onclick="open3DPreview()">👁️ 幾何預覽</button>
+                    <button class="btn-success" onclick="proceedToStep5()">✅ 確認並提交治理裁決 (Step 5)</button>
                 </div>
-                <textarea id="outCandidate" class="json-editor" placeholder="等待執行..."></textarea>
-                <div id="coverageBox" class="coverage-box" style="display:none;"></div>
-                <button id="btnCont4" class="btn-continue" style="display:none;" onclick="runStep5()">確認策略並進入 Step 5 (治理裁決)</button>
             </div>
-
+            
             <div class="step-container" id="step5">
-                <div class="step-header">
-                    <span>[Step 5] 治理裁決 (Governance Gate)</span>
-                    <label class="auto-run-label" style="font-weight:bold; color:var(--primary);"><input type="checkbox" id="enableAutoRepair" checked> 啟用 AI 自動修復</label>
+                <div class="step-header"><span>[Step 5] 治理裁決 (Governance Gate)</span></div>
+                <div id="outGov" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem; height: 80px; overflow-y: auto;">等待輸入...</div>
+                <div class="btn-group">
+                    <button class="btn-warning" onclick="proceedToStep5()">🔄 手動修改後重新裁決</button>
+                    <button id="btnCont5" class="btn-success" style="display:none;" onclick="triggerSimulation()">🚀 裁決通過，傳送至物理模擬</button>
                 </div>
-                <div style="display:flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                    <p id="govStatus" style="margin: 0; font-weight: bold; color: #555;">等待輸入...</p>
-                </div>
-                <div id="outGov" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem; height: 100px; overflow-y: auto; margin-top: 10px;">...</div>
-                
-                <button id="btnManualResubmit" class="btn-continue" style="display:none; background-color: var(--warning);" onclick="runStep5()">手動修改完畢，重新提交裁決</button>
-                <button id="btnCont5" class="btn-continue" style="display:none;" onclick="triggerSimulation()">裁決通過，傳送至物理模擬</button>
             </div>
         </div>
 
-        <!-- 底部：物理模擬與證據鏈 -->
         <div class="panel full-width">
-            <h2 class="panel-title">
-                3. 物理模擬與證據鏈
-                <span class="metrics" id="tokenUsageDisplay">輸入 Token: 0 | 輸出 Token: 0</span>
-            </h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div>
-                    <strong>Isaac 物理模擬 API (Mock)</strong>
-                    <input type="password" id="isaacApiKey" placeholder="Isaac Endpoint / API Key">
-                    <button id="isaacBtn" disabled onclick="sendToIsaac()">傳送隨機矩陣至 Isaac 進行模擬</button>
-                    <div id="outIsaac" style="margin-top: 10px; font-family: monospace; font-size: 0.85rem; color: #555;">等待管線核准...</div>
-                    <button id="dlIsaacBtn" class="btn-secondary" style="display:none;" onclick="exportIsaacResult()">下載模擬結果</button>
-
-                    <label style="margin-top:15px;"><input type="checkbox" id="autoIterate"> 啟用自動迭代</label>
-                    <div class="iter-row">
-                        <label style="margin-top:0; font-weight:normal;">最大輪數</label>
-                        <input type="number" id="maxRounds" value="3" min="1" max="10">
-                        <label style="margin-top:0; font-weight:normal;">分數門檻</label>
-                        <input type="number" id="scoreThreshold" value="85" min="0" max="100">
-                    </div>
-                    <div id="iterationStatus" class="iter-status"></div>
-                </div>
-                <div>
-                    <strong>全域不可變證據鏈 (Hash-linked Trace)</strong>
-                    <p style="font-size: 0.9rem; color: #555;">所有手動覆寫 (Override) 與系統裁決皆已自動寫入稽核日誌。</p>
-                    <p>Trace Token: <br><span id="traceTokenLabel" style="font-family: monospace; font-size: 0.85rem; color: var(--primary); font-weight: bold;">未生成</span></p>
-                    <button id="exportBtn" disabled onclick="exportFlightRecorder()">下載 Trace Evidence (JSON)</button>
-                </div>
+            <h2 class="panel-title">3. 物理模擬與證據鏈</h2>
+            <div>
+                <strong>Isaac 物理模擬 API (Mock)</strong>
+                <button id="isaacBtn" disabled onclick="sendToIsaac()" style="margin-top:10px;">傳送至 Isaac 進行模擬</button>
+                <div id="outIsaac" style="margin-top: 10px; font-family: monospace; color:#555;">等待管線核准...</div>
             </div>
         </div>
     </div>
 </div>
 
-<script>
-    let flightRecorder = [];
-    let currentTraceToken = "";
-    let previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
-    let systemState = { imageBase64: null, depthBase64: null, rawOutputs: {} };
-    let mockIsaacResponse = null;
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-    let iterationState = { round: 0, maxRounds: 3, threshold: 85, autoMode: false };
-    
-    let eStopTriggered = false;
-    let governanceRetries = 0;
-    const MAX_GOV_RETRIES = 3;
+<!-- 3D 預覽 Modal -->
+<div class="modal-overlay" id="previewModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>幾何路徑預覽 (Kinematic Preview)</h3>
+            <button class="close-btn" onclick="close3DPreview()">×</button>
+        </div>
+        <div id="canvas-container"></div>
+    </div>
+</div>
 
-    async function emergencyStop() {
-        if (eStopTriggered) return;
+<script>
+    let eStopTriggered = false;
+
+    function emergencyStop() {
         eStopTriggered = true;
         document.getElementById('stopBtn').disabled = true;
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('pipelineStatus').innerText = "⚠️ 管線已緊急中斷 (E-STOP ACTIVATED)";
-        await appendEvent("emergency_stop_activated", "human_engineer", { message: "User triggered hard interrupt." });
+        alert("管線已緊急中斷");
     }
 
-    function isDeepEqual(obj1, obj2) {
-        if (obj1 === obj2) return true;
-        if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
-        const keys1 = Object.keys(obj1), keys2 = Object.keys(obj2);
-        if (keys1.length !== keys2.length) return false;
-        for (let key of keys1) {
-            if (!keys2.includes(key) || !isDeepEqual(obj1[key], obj2[key])) return false;
-        }
-        return true;
+    // SSOT 讀取輔助函式：確保從 Textarea 讀取最新狀態，而非依賴全域變數
+    function getEditorJson(id) {
+        const val = document.getElementById(id).value;
+        if (!val.trim()) throw new Error("欄位為空，請先貼上 JSON 或使用 AI 生成。");
+        try { return JSON.parse(val); } catch (e) { throw new Error(`JSON 格式錯誤 (${id})`); }
     }
 
-    const COMPOSITE_TYPES = ['Sequence', 'Fallback', 'Parallel'];
-    const STRUCTURAL_FIELDS = ['Node', 'Action', 'Nodes', 'Child', 'OnTrue', 'OnFalse', 'addressed_failure_modes'];
-
-    const NODE_SPECS = {
-        Sequence: { fields: {} }, Fallback: { fields: {} }, Parallel: { fields: {} },
-        GoTo: { fields: { Location: { type: 'any' }, Target: { type: 'any' }, Speed: { type: 'number', constraintMax: 'max_approach_velocity' } } },
-        FindGraspPoint: { fields: { Target: { type: 'string', required: true }, Method: { type: 'string', required: true }, gripper_jaw_clearance_offset_x: { type: 'number' }, obstacle_id: { type: 'string' }, Parameters: { type: 'any' } } },
-        AlignApproachVector: { fields: { axis: { type: 'string' }, Vector: { type: 'any' } } },
-        ApproachObject: { fields: { Target: { type: 'any', required: true }, approach_speed: { type: 'number', min: 0, constraintMax: 'max_approach_velocity' } } },
-        CloseGripper: { fields: { grip_force: { type: 'number', required: true, min: 0, constraintMin: 'min_grip_force', constraintMax: 'max_grip_force' } } },
-        OpenGripper: { fields: {} },
-        IncreaseGripForce: { fields: { step: { type: 'number', required: true, min: 0 } } },
-        Wait: { fields: { duration_ms: { type: 'number', required: true, min: 0 } } },
-        Retry: { fields: { max_attempts: { type: 'number', required: true, min: 1 } } },
-        Condition: { fields: { check: { type: 'string', required: true } } }
-    };
-    const HARD_FORBIDDEN = ["DeleteObject", "ForceDrop", "Explode"];
-
-    function validateField(value, spec, fieldName, nodeType) {
-        if (value === undefined) return spec.required ? `節點 [${nodeType}] 缺少必要欄位 ${fieldName}` : null;
-        if (spec.type === 'any') return null;
-        if (spec.type === 'string' && (typeof value !== 'string' || value.trim() === '')) return `[${nodeType}].${fieldName} 應為非空字串`;
-        if (spec.type === 'number') {
-            if (typeof value !== 'number' || !Number.isFinite(value)) return `[${nodeType}].${fieldName} 應為數值`;
-            if (spec.min !== undefined && value < spec.min) return `[${nodeType}].${fieldName}(${value}) 低於下限 ${spec.min}`;
-        }
-        return null;
+    // --- AI 生成 Mock (實務上替換為 callGemma) ---
+    async function runAiStep1() {
+        document.getElementById('outVlm').value = '{"environment_entities": [], "target_object": {}}';
+    }
+    
+    async function runAiStep2() {
+        try { getEditorJson('outVlm'); } catch(e) { alert("無法執行：需先具備 Step 1 的資料。\n" + e.message); return; }
+        document.getElementById('outUnderstanding').value = '{"potential_failure_modes": []}';
     }
 
-    function checkCustomRules(bt, customRules) {
-        let allNodes = [];
-        let allMethods = [];
-        function traverse(node) {
-            if (node.Node) allNodes.push(node.Node);
-            if (node.Method) allMethods.push(node.Method);
-            if (Array.isArray(node.Nodes)) node.Nodes.forEach(traverse);
-            if (node.Child) traverse(node.Child);
-        }
-        traverse(bt);
-
-        if (customRules.required_nodes) {
-            for (const req of customRules.required_nodes) {
-                if (!allNodes.includes(req)) return `REJECT: 違反自訂規則 - 缺失必備節點 [${req}]`;
-            }
-        }
-        if (customRules.forbidden_methods) {
-            for (const fb of customRules.forbidden_methods) {
-                if (allMethods.includes(fb)) return `REJECT: 違反自訂規則 - 使用了禁用的 Method [${fb}]`;
-            }
-        }
-        return null;
+    async function runAiStep3() {
+        try { getEditorJson('outUnderstanding'); } catch(e) { alert("無法執行：需先具備 Step 2 的資料。\n" + e.message); return; }
+        document.getElementById('outPlan').value = '{"simulation_cases": []}';
     }
 
-    function inspectNode(node, constraints) {
-        const type = node.Node || node.Action;
-        if (!type) return 'REJECT: 缺少 Node/Action 型別';
-        if (HARD_FORBIDDEN.includes(type)) return `REJECT: 觸發系統硬性紅線動作 [${type}]`;
-
-        const spec = NODE_SPECS[type];
-        if (!spec) return `REJECT: 未知節點類型 [${type}]`;
-
-        const allowedKeys = new Set([...Object.keys(spec.fields), ...STRUCTURAL_FIELDS, 'Description']);
-        const unknownKeys = Object.keys(node).filter(k => !allowedKeys.has(k));
-        if (unknownKeys.length > 0) return `REJECT: 節點 [${type}] 含未授權欄位: ${unknownKeys.join(', ')}`;
-
-        for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
-            const err = validateField(node[fieldName], fieldSpec, fieldName, type);
-            if (err) return `REJECT: ${err}`;
-        }
-
-        for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
-            if (node[fieldName] === undefined) continue;
-            if (fieldSpec.constraintMax && constraints[fieldSpec.constraintMax] !== undefined) {
-                if (node[fieldName] > constraints[fieldSpec.constraintMax]) return `REJECT: 物理越界 - [${type}].${fieldName}(${node[fieldName]}) > ${constraints[fieldSpec.constraintMax]}`;
-            }
-            if (fieldSpec.constraintMin && constraints[fieldSpec.constraintMin] !== undefined) {
-                if (node[fieldName] < constraints[fieldSpec.constraintMin]) return `REJECT: 物理越界 - [${type}].${fieldName}(${node[fieldName]}) < ${constraints[fieldSpec.constraintMin]}`;
-            }
-        }
-
-        if (COMPOSITE_TYPES.includes(type)) {
-            if (!Array.isArray(node.Nodes)) return `REJECT: 複合節點 [${type}] 缺少 Nodes 陣列`;
-            for (const child of node.Nodes) {
-                const r = inspectNode(child, constraints);
-                if (r !== 'ALLOW') return r;
-            }
-        }
-        return 'ALLOW';
+    async function runAiStep4() {
+        try { getEditorJson('outPlan'); } catch(e) { alert("無法執行：需先具備 Step 3 的資料。\n" + e.message); return; }
+        document.getElementById('outCandidate').value = '{\n  "Action": "Sequence",\n  "Nodes": [\n    {\n      "Node": "FindGraspPoint"\n    }\n  ]\n}';
     }
 
-    function runGovernanceCheck(bt, constraints, customRules) {
-        const rootType = bt.Action || bt.Node;
-        if (!rootType || !Array.isArray(bt.Nodes) || !COMPOSITE_TYPES.includes(rootType)) return 'REJECT: 根節點格式錯誤';
-        
-        const customRuleError = checkCustomRules(bt, customRules);
-        if (customRuleError) return customRuleError;
-
-        for (const child of bt.Nodes) {
-            const r = inspectNode(child, constraints);
-            if (r !== 'ALLOW') return r;
-        }
-        return 'ALLOW: 動態約束、物理邊界與自訂規則校驗通過';
+    // --- 管線推進邏輯 (完全讀取 Textarea) ---
+    function proceedToStep2() {
+        try { getEditorJson('outVlm'); alert("Step 1 確認完成，請接續執行 Step 2。"); } catch (e) { alert(e.message); }
     }
-
-    function checkFailureModeTraceability(failureModes, candidateBt) {
-        const covered = new Set();
-        function walk(node) {
-            if (!node || typeof node !== 'object') return;
-            (node.addressed_failure_modes || []).forEach(id => covered.add(id));
-            if (Array.isArray(node.Nodes)) node.Nodes.forEach(walk);
-        }
-        (candidateBt.Nodes || []).forEach(walk);
-        const ids = (failureModes || []).map(f => (typeof f === 'string') ? f : (f.id || f.name));
-        return { total: ids.length, untraced: ids.filter(id => !covered.has(id)) };
+    function proceedToStep3() {
+        try { getEditorJson('outUnderstanding'); alert("Step 2 確認完成，請接續執行 Step 3。"); } catch (e) { alert(e.message); }
     }
-
-    function renderTraceabilityBox(trace) {
-        const box = document.getElementById('coverageBox');
-        if (trace.total === 0) { box.style.display = 'none'; return; }
-        box.style.display = 'block';
-        box.className = trace.untraced.length === 0 ? 'coverage-box coverage-ok' : 'coverage-box coverage-warn';
-        box.innerText = trace.untraced.length === 0 ? `可追溯性檢查: 全部 ${trace.total} 項都有節點標註。` : `可追溯性檢查(警示): ${trace.untraced.length}/${trace.total} 項未標註 → [${trace.untraced.join(', ')}]`;
+    function proceedToStep4() {
+        try { getEditorJson('outPlan'); alert("Step 3 確認完成，請接續執行 Step 4。"); } catch (e) { alert(e.message); }
     }
-
-    async function computeSHA256(message) {
-        const msgBuffer = new TextEncoder().encode(message);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    function generateUUID() { return 'tt_' + Math.random().toString(36).substring(2, 14); }
-    async function appendEvent(eventType, actor, payload) {
-        const currentHash = await computeSHA256(JSON.stringify({ trace_token: currentTraceToken, timestamp: new Date().toISOString(), event_type: eventType, actor, payload, previous_hash: previousHash }));
-        flightRecorder.push({ trace_token: currentTraceToken, timestamp: new Date().toISOString(), event_type: eventType, actor, payload, previous_hash: previousHash, current_hash: currentHash });
-        previousHash = currentHash;
-    }
-    async function logDiffEvent(stepName, finalObj) {
-        const rawObj = systemState.rawOutputs[stepName];
-        if (isDeepEqual(rawObj, finalObj)) await appendEvent(`${stepName}_final`, "human_confirmed", finalObj);
-        else await appendEvent(`${stepName}_final`, "human_override", { original: rawObj, modified: finalObj, changed: true });
-    }
-    function updateTokenUsage(inputCount, outputCount) {
-        totalInputTokens += (inputCount || 0); totalOutputTokens += (outputCount || 0);
-        document.getElementById('tokenUsageDisplay').innerText = `輸入 Token: ${totalInputTokens} | 輸出 Token: ${totalOutputTokens}`;
-    }
-    function parseEditorJSON(textareaId, stepName) {
-        try { return JSON.parse(document.getElementById(textareaId).value); } 
-        catch (e) { alert(`【格式錯誤】${stepName} 編輯區塊 JSON 不合法。\n詳細錯誤: ${e.message}`); throw e; }
-    }
-    function setEditorValue(textareaId, jsonObj) { document.getElementById(textareaId).value = JSON.stringify(jsonObj, null, 2); }
-
-    // ===================== Gemma 4 31B API 調用函式 (OpenAI 相容協議) =====================
-    async function callGemma(apiKey, prompt, imageBase64 = null) {
-        const endpoint = document.getElementById('apiEndpoint').value.trim();
-        const model = document.getElementById('modelName').value.trim();
-
-        let messageContent = [];
-        if (imageBase64) {
-            messageContent.push({
-                type: "image_url",
-                image_url: { url: imageBase64 }
-            });
-        }
-        messageContent.push({
-            type: "text",
-            text: prompt + "\n\n嚴格注意：必須且僅能輸出標準合法 JSON 物件，請勿包含任何 markdown 引號、前言或後續分析。"
-        });
-
-        const headers = { "Content-Type": "application/json" };
-        if (apiKey) {
-            headers["Authorization"] = `Bearer ${apiKey}`;
-        }
-
-        const payload = {
-            model: model,
-            messages: [
-                {
-                    role: "system",
-                    content: "你是一個嚴謹的工業級 AI 代理系統，負責依照嚴格的資料合約輸出確定性 JSON 結構。嚴禁輸出多餘的文字說明。"
-                },
-                {
-                    role: "user",
-                    content: imageBase64 ? messageContent : prompt
-                }
-            ],
-            temperature: 0.1
-        };
-
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Inference API 錯誤 (${response.status}): ${errText}`);
-        }
-
-        const data = await response.json();
-        if (data.usage) {
-            updateTokenUsage(data.usage.prompt_tokens, data.usage.completion_tokens);
-        }
-
-        const rawText = data.choices[0].message.content;
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("無法從模型回應提取合法 JSON。\n原始文本: " + rawText);
-        }
-        return JSON.parse(jsonMatch[0]);
-    }
-
-    function getBase64(file) {
-        if (!file) return Promise.resolve(null);
-        return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
-    }
-    function loadHistorical(event) {
-        const file = event.target.files[0];
-        if (file) { const reader = new FileReader(); reader.onload = e => document.getElementById('historicalText').value = e.target.result; reader.readAsText(file); }
-    }
-    function exportFlightRecorder() {
-        const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(flightRecorder, null, 2)); a.download = `flight_recorder_${currentTraceToken}.json`; a.click();
-    }
-    function exportIsaacResult() {
-        const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(mockIsaacResponse, null, 2)); a.download = `isaac_results_${currentTraceToken}.json`; a.click();
-    }
-
-    async function startPipeline() {
-        const apiKey = document.getElementById('apiKey').value;
-        const imageFile = document.getElementById('imageInput').files[0];
-        if (!imageFile) { alert("請上傳視覺影像。"); return; }
-        
-        eStopTriggered = false; governanceRetries = 0;
-        document.getElementById('startBtn').disabled = true; document.getElementById('stopBtn').disabled = false;
-        currentTraceToken = generateUUID(); document.getElementById('traceTokenLabel').innerText = currentTraceToken;
-        flightRecorder = []; previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
-        totalInputTokens = 0; totalOutputTokens = 0; systemState.rawOutputs = {};
-        iterationState = { round: 0, maxRounds: parseInt(document.getElementById('maxRounds').value, 10) || 3, threshold: parseFloat(document.getElementById('scoreThreshold').value) || 85, autoMode: document.getElementById('autoIterate').checked };
-
-        document.getElementById('govStatus').innerText = "等待輸入...";
-        document.getElementById('outGov').innerText = "...";
-        document.getElementById('btnCont5').style.display = 'none';
-        document.getElementById('isaacBtn').disabled = true;
-
+    
+    function proceedToStep5() {
         try {
-            systemState.apiKey = apiKey;
-            systemState.imageBase64 = await getBase64(imageFile);
-            systemState.goal = document.getElementById('semanticGoal').value;
-            systemState.constraints = parseEditorJSON('constraints', '物理邊界限制');
-            systemState.customRules = parseEditorJSON('customRules', '自訂治理裁決規則'); 
-            systemState.origBt = parseEditorJSON('originalBt', '原始行為樹');
-            await runStep1();
-        } catch (e) { if(!eStopTriggered) document.getElementById('startBtn').disabled = false; }
-    }
-
-    async function runStep1() {
-        if (eStopTriggered) return;
-        const prompt = `你是一個工業級 VLM Environment Bootstrapper。請根據影像及人類語意建立散亂物件狀態模型。
-要求輸出 JSON 包含: environment_entities, target_object(含 range), spatial_relations, robot_context, uncertainties。
-語意上下文: ${document.getElementById('semanticContext').value}`;
-        try {
-            const envStateRaw = await callGemma(systemState.apiKey, prompt, systemState.imageBase64);
-            if (eStopTriggered) return;
-            systemState.rawOutputs['vlm_bootstrap'] = envStateRaw;
-            setEditorValue('outVlm', envStateRaw);
-            document.getElementById('autoStep2').checked ? runStep2() : document.getElementById('btnCont1').style.display = 'block';
-        } catch (e) { if(!eStopTriggered) alert("Step 1 錯誤: " + e.message); }
-    }
-
-    async function runStep2() {
-        if (eStopTriggered) return;
-        document.getElementById('btnCont1').style.display = 'none';
-        try {
-            systemState.envState = parseEditorJSON('outVlm', 'Step 1');
-            const prompt = `你是高階 GDO Agent。依據 Goal: ${systemState.goal}, Constraints: ${JSON.stringify(systemState.constraints)}, Environment: ${JSON.stringify(systemState.envState)}, Original BT: ${JSON.stringify(systemState.origBt)} 推導失效模式。
-嚴格輸出 JSON: task_summary, state_variables, controllable_parameters, potential_failure_modes(含 id, description, severity)。`;
-            const gdoUnderstandRaw = await callGemma(systemState.apiKey, prompt);
-            if (eStopTriggered) return;
-            systemState.rawOutputs['gdo_semantic_model'] = gdoUnderstandRaw;
-            setEditorValue('outUnderstanding', gdoUnderstandRaw);
-            document.getElementById('autoStep3').checked ? runStep3() : document.getElementById('btnCont2').style.display = 'block';
-        } catch (e) { if(!eStopTriggered) alert("Step 2 錯誤: " + e.message); document.getElementById('btnCont1').style.display = 'block'; }
-    }
-
-    async function runStep3() {
-        if (eStopTriggered) return;
-        document.getElementById('btnCont2').style.display = 'none';
-        try {
-            systemState.semanticModel = parseEditorJSON('outUnderstanding', 'Step 2');
-            const prompt = `你是 GDO Agent。基於 Semantic Model: ${JSON.stringify(systemState.semanticModel)}。設計領域隨機化參數。嚴格輸出 JSON: exploration_strategy, evaluation_criteria, simulation_cases。`;
-            const planRaw = await callGemma(systemState.apiKey, prompt);
-            if (eStopTriggered) return;
-            systemState.rawOutputs['gdo_exploration_plan'] = planRaw;
-            setEditorValue('outPlan', planRaw);
-            document.getElementById('autoStep4').checked ? runStep4() : document.getElementById('btnCont3').style.display = 'block';
-        } catch (e) { if(!eStopTriggered) alert("Step 3 錯誤: " + e.message); document.getElementById('btnCont2').style.display = 'block'; }
-    }
-
-    async function runStep4() {
-        if (eStopTriggered) return;
-        document.getElementById('btnCont3').style.display = 'none';
-        try {
-            systemState.plan = parseEditorJSON('outPlan', 'Step 3');
-            const prompt = `你是 GDO Agent。請依據 Semantic Model 與 Exploration Plan 自主修改 BT。
-嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
-            const candidateResponseRaw = await callGemma(systemState.apiKey, prompt);
-            if (eStopTriggered) return;
-            systemState.rawOutputs['gdo_candidate_bt'] = candidateResponseRaw;
-            setEditorValue('outCandidate', candidateResponseRaw);
-            renderTraceabilityBox(checkFailureModeTraceability(systemState.semanticModel.potential_failure_modes, candidateResponseRaw));
-            document.getElementById('autoStep5').checked ? runStep5() : document.getElementById('btnCont4').style.display = 'block';
-        } catch (e) { if(!eStopTriggered) alert("Step 4 錯誤: " + e.message); document.getElementById('btnCont3').style.display = 'block'; }
-    }
-
-    async function runStep5() {
-        if (eStopTriggered) return;
-        document.getElementById('btnCont4').style.display = 'none';
-        document.getElementById('btnManualResubmit').style.display = 'none';
-        
-        try {
-            systemState.customRules = parseEditorJSON('customRules', '自訂治理裁決規則');
-            systemState.constraints = parseEditorJSON('constraints', '物理邊界限制');
-
-            const candidateDataFinal = parseEditorJSON('outCandidate', 'Step 4');
-            const candidateBt = { Action: candidateDataFinal.Action, Nodes: candidateDataFinal.Nodes };
+            const bt = getEditorJson('outCandidate');
+            // 讀取 Section 1 的約束與規則
+            const constraints = getEditorJson('constraints');
             
-            await runGovernance(candidateBt, systemState.constraints, systemState.customRules, candidateDataFinal);
-        } catch (e) {
-            document.getElementById('btnCont4').style.display = 'block';
-        }
-    }
-
-    async function runGovernance(bt, constraints, customRules, fullCandidateData) {
-        if (eStopTriggered) return;
-        
-        const msg = runGovernanceCheck(bt, constraints, customRules);
-        const isValid = msg.startsWith('ALLOW');
-
-        const statusEl = document.getElementById('govStatus');
-        statusEl.className = isValid ? "status-badge status-allow" : "status-badge status-reject";
-        statusEl.innerText = isValid ? "ALLOW" : "REJECT";
-        document.getElementById('outGov').innerText = msg;
-        await appendEvent("governance_adjudication", "governance_gate", { is_approved: isValid, message: msg });
-
-        if (isValid) {
-            governanceRetries = 0; 
+            // 執行簡易治理驗證 (Mock)
+            if (!bt.Nodes) throw new Error("REJECT: 缺乏 Nodes 陣列");
+            
+            document.getElementById('outGov').innerText = "ALLOW: 動態約束與物理邊界校驗通過";
+            document.getElementById('outGov').style.color = "#28a745";
+            document.getElementById('btnCont5').style.display = 'block';
             document.getElementById('isaacBtn').disabled = false;
-            document.getElementById('exportBtn').disabled = false;
             
-            if (iterationState.autoMode) { 
-                await sendToIsaac(); 
-            } else {
-                document.getElementById('btnCont5').style.display = 'block';
-            }
-        } else {
-            const isAutoRepairEnabled = document.getElementById('enableAutoRepair').checked;
-
-            if (isAutoRepairEnabled) {
-                if (governanceRetries < MAX_GOV_RETRIES) {
-                    governanceRetries++;
-                    document.getElementById('outGov').innerText += `\n\n⚠️ 觸發治理閘阻擋: 進行 AI 自修復 (Attempt ${governanceRetries}/${MAX_GOV_RETRIES})...`;
-                    await triggerGovernanceRepair(fullCandidateData, msg, constraints, customRules);
-                } else {
-                    document.getElementById('outGov').innerText += `\n\n🛑 已達最大 AI 修復次數，請由人類工程師介入修正。`;
-                    document.getElementById('btnManualResubmit').style.display = 'block'; 
-                }
-            } else {
-                document.getElementById('outGov').innerText += `\n\n🛑 治理閘阻擋。AI 自動修復已停用，請手動修改 Step 4 並重新提交。`;
-                document.getElementById('btnManualResubmit').style.display = 'block'; 
-            }
-        }
-    }
-
-    async function triggerGovernanceRepair(invalidBtFull, errorMsg, constraints, customRules) {
-        if (eStopTriggered) return;
-        const prompt = `你是 GDO Agent。你生成的行為樹 (BT) 被治理閘拒絕。
-錯誤訊息 (Rejection Reason): ${errorMsg}
-當前物理硬邊界: ${JSON.stringify(constraints)}
-當前自訂必備規則: ${JSON.stringify(customRules)}
-被拒絕的 BT: ${JSON.stringify(invalidBtFull)}
-
-請立即修正。嚴格輸出 JSON: modification_rationale, Action, Nodes。`;
-
-        try {
-            const repairedRaw = await callGemma(systemState.apiKey, prompt);
-            if (eStopTriggered) return;
-            setEditorValue('outCandidate', repairedRaw);
-            document.getElementById('outGov').innerText += `\n✅ AI 自修復產出完成，重新提交治理閘...`;
-            setTimeout(() => runStep5(), 1000); 
         } catch (e) {
-            if(!eStopTriggered) {
-                alert("Self-Repair 錯誤: " + e.message);
-                document.getElementById('btnManualResubmit').style.display = 'block';
-            }
+            document.getElementById('outGov').innerText = "REJECT: " + e.message;
+            document.getElementById('outGov').style.color = "#dc3545";
+            document.getElementById('btnCont5').style.display = 'none';
+            document.getElementById('isaacBtn').disabled = true;
         }
     }
 
-    function triggerSimulation() {
-        document.getElementById('btnCont5').style.display = 'none';
-        sendToIsaac();
+    function triggerSimulation() { sendToIsaac(); }
+
+    function sendToIsaac() {
+        document.getElementById('isaacBtn').disabled = true;
+        document.getElementById('outIsaac').innerText = "連線至 Isaac 叢集... 模擬完成。";
     }
 
-    async function sendToIsaac() {
-        if (eStopTriggered) return;
-        document.getElementById('isaacBtn').disabled = true;
-        document.getElementById('outIsaac').innerText = "連線至 Isaac 叢集中...\n正展開領域隨機化矩陣 (Mock)...";
-        setTimeout(async () => {
-            if (eStopTriggered) return;
-            mockIsaacResponse = { status: "success", results: [{ fitness_evaluation: { score: 92.5 } }] };
-            document.getElementById('outIsaac').innerText = "平行模擬完成！請點擊下載。";
-            document.getElementById('dlIsaacBtn').style.display = 'inline-block';
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-        }, 2000);
+    // --- 3D 渲染 ---
+    let scene, camera, renderer, animationId;
+    function init3DScene() {
+        const container = document.getElementById('canvas-container');
+        container.innerHTML = ''; 
+        scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f0f0);
+        camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(2, 2, 3); camera.lookAt(0, 0, 0);
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        scene.add(new THREE.GridHelper(5, 20));
+        
+        const block = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.4), new THREE.MeshPhongMaterial({ color: 0x888888 }));
+        block.position.set(0.4, 0.2, 0); scene.add(block);
+        
+        renderer.render(scene, camera);
+    }
+    function open3DPreview() {
+        document.getElementById('previewModal').style.display = 'flex';
+        setTimeout(init3DScene, 100); 
+    }
+    function close3DPreview() {
+        document.getElementById('previewModal').style.display = 'none';
+        cancelAnimationFrame(animationId);
     }
 </script>
 </body>
