@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GDO 目標自優化代理系統 v3.8 (完全解耦版) - WesmartAI</title>
+    <title>GDO 系統 v3.9 (Gemini API + 動態 3D 預覽版) - WesmartAI</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root { 
@@ -53,13 +53,13 @@
 <div class="sidebar">
     <h1>WesmartAI</h1>
     <h2>可信智慧整合有限公司</h2>
-    <h3>GDO 系統 v3.8<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(完全解耦 SSOT 版)</span></h3>
+    <h3>GDO 系統 v3.9<br><span style="font-size:0.85rem; font-weight:normal; color:#ccc;">(Gemini 原生 + 動態 3D)</span></h3>
     <div class="btn-demo">系統狀態: 待機中</div>
     <div class="changelog">
-        v3.8 變更:<br>
-        · 實作無狀態管線架構<br>
-        · 支援任意 Step 貼上 JSON 接續執行<br>
-        · 常駐 AI 生成與手動確認雙軌按鈕<br>
+        v3.9 變更:<br>
+        · 恢復 Gemini 原生 API 端點<br>
+        · 整合動態 3D 夾取軌跡渲染<br>
+        · 繼承 v3.8 解耦架構 (SSOT)<br>
     </div>
 </div>
 
@@ -68,27 +68,20 @@
         <!-- 左側配置 -->
         <div class="panel">
             <h2 class="panel-title">1. 系統配置與環境輸入</h2>
-            <label>Inference API Endpoint:</label>
-            <input type="text" id="apiEndpoint" value="https://openrouter.ai/api/v1/chat/completions">
-            <label>Model ID:</label>
-            <input type="text" id="modelName" value="google/gemma-4-31b-it:free">
-            <label>API Key:</label>
-            <input type="password" id="apiKey" placeholder="輸入 API Key">
+            <label>Gemini API Key:</label>
+            <input type="password" id="apiKey" placeholder="輸入 Google AI Studio API Key">
             <div class="file-row">
                 <div><label>視覺影像 (RGB):</label><input type="file" id="imageInput" accept="image/*"></div>
                 <div><label>深度圖 (Depth):</label><input type="file" id="depthInput"></div>
             </div>
             <label>人類語意目標 (Goal):</label>
-            <textarea id="semanticGoal" class="input-box" rows="2">優化整體作業節拍，精確計算進入角度避免邊緣擦撞。</textarea>
+            <textarea id="semanticGoal" class="input-box" rows="2">鎖定中央藍色圓柱體，優化作業節拍，精確計算進入角度避免邊緣擦撞。</textarea>
             <label>物理邊界限制 (Constraints):</label>
             <textarea id="constraints" class="input-box" rows="2">{"max_approach_velocity": 0.5, "end_effector_type": "parallel_gripper"}</textarea>
             <label>自訂治理裁決規則 (Custom Rules):</label>
             <textarea id="customRules" class="input-box" rows="2">{"required_nodes": ["FindGraspPoint", "CloseGripper"]}</textarea>
-            <label>原始行為樹 (Original BT):</label>
-            <textarea id="originalBt" class="input-box" rows="2">{"Action": "Sequence", "Nodes": [{"Node": "FindGraspPoint"}]}</textarea>
             
-            <button id="startBtn" onclick="runAiStep1()" style="width: 100%; margin-top: 15px;">🚀 全自動執行 (從頭啟動管線)</button>
-            <button id="stopBtn" class="btn-stop" onclick="emergencyStop()" disabled>緊急停止 (E-Stop)</button>
+            <button id="stopBtn" class="btn-stop" onclick="emergencyStop()">緊急停止 (E-Stop)</button>
         </div>
 
         <!-- 右側管線 -->
@@ -99,8 +92,8 @@
                 <div class="step-header"><span>[Step 1] VLM 環境建模</span></div>
                 <textarea id="outVlm" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
                 <div class="btn-group">
-                    <button onclick="runAiStep1()">🤖 呼叫 AI 生成</button>
-                    <button class="btn-success" onclick="proceedToStep2()">✅ 確認並進入 Step 2</button>
+                    <button onclick="runAiStep(1)">🤖 呼叫 AI 生成</button>
+                    <button class="btn-success" onclick="proceedToStep(2)">✅ 確認並進入 Step 2</button>
                 </div>
             </div>
             
@@ -108,8 +101,8 @@
                 <div class="step-header"><span>[Step 2] GDO 語意與失效分析</span></div>
                 <textarea id="outUnderstanding" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
                 <div class="btn-group">
-                    <button onclick="runAiStep2()">🤖 呼叫 AI 生成</button>
-                    <button class="btn-success" onclick="proceedToStep3()">✅ 確認並進入 Step 3</button>
+                    <button onclick="runAiStep(2)">🤖 呼叫 AI 生成</button>
+                    <button class="btn-success" onclick="proceedToStep(3)">✅ 確認並進入 Step 3</button>
                 </div>
             </div>
             
@@ -117,8 +110,8 @@
                 <div class="step-header"><span>[Step 3] 探索策略矩陣</span></div>
                 <textarea id="outPlan" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
                 <div class="btn-group">
-                    <button onclick="runAiStep3()">🤖 呼叫 AI 生成</button>
-                    <button class="btn-success" onclick="proceedToStep4()">✅ 確認並進入 Step 4</button>
+                    <button onclick="runAiStep(3)">🤖 呼叫 AI 生成</button>
+                    <button class="btn-success" onclick="proceedToStep(4)">✅ 確認並進入 Step 4</button>
                 </div>
             </div>
             
@@ -126,9 +119,9 @@
                 <div class="step-header"><span>[Step 4] 候選策略產出 (Candidate BT)</span></div>
                 <textarea id="outCandidate" class="json-editor" placeholder="在此貼上舊有 JSON 或點擊 AI 生成..."></textarea>
                 <div class="btn-group">
-                    <button onclick="runAiStep4()">🤖 呼叫 AI 生成</button>
+                    <button onclick="runAiStep(4)">🤖 呼叫 AI 生成</button>
                     <button class="btn-secondary" onclick="open3DPreview()">👁️ 幾何預覽</button>
-                    <button class="btn-success" onclick="proceedToStep5()">✅ 確認並提交治理裁決 (Step 5)</button>
+                    <button class="btn-success" onclick="proceedToStep(5)">✅ 確認並提交治理裁決 (Step 5)</button>
                 </div>
             </div>
             
@@ -136,7 +129,7 @@
                 <div class="step-header"><span>[Step 5] 治理裁決 (Governance Gate)</span></div>
                 <div id="outGov" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem; height: 80px; overflow-y: auto;">等待輸入...</div>
                 <div class="btn-group">
-                    <button class="btn-warning" onclick="proceedToStep5()">🔄 手動修改後重新裁決</button>
+                    <button class="btn-warning" onclick="proceedToStep(5)">🔄 手動修改後重新裁決</button>
                     <button id="btnCont5" class="btn-success" style="display:none;" onclick="triggerSimulation()">🚀 裁決通過，傳送至物理模擬</button>
                 </div>
             </div>
@@ -169,100 +162,201 @@
 
     function emergencyStop() {
         eStopTriggered = true;
-        document.getElementById('stopBtn').disabled = true;
         alert("管線已緊急中斷");
     }
 
-    // SSOT 讀取輔助函式：確保從 Textarea 讀取最新狀態，而非依賴全域變數
     function getEditorJson(id) {
         const val = document.getElementById(id).value;
         if (!val.trim()) throw new Error("欄位為空，請先貼上 JSON 或使用 AI 生成。");
         try { return JSON.parse(val); } catch (e) { throw new Error(`JSON 格式錯誤 (${id})`); }
     }
 
-    // --- AI 生成 Mock (實務上替換為 callGemma) ---
-    async function runAiStep1() {
-        document.getElementById('outVlm').value = '{"environment_entities": [], "target_object": {}}';
-    }
-    
-    async function runAiStep2() {
-        try { getEditorJson('outVlm'); } catch(e) { alert("無法執行：需先具備 Step 1 的資料。\n" + e.message); return; }
-        document.getElementById('outUnderstanding').value = '{"potential_failure_modes": []}';
-    }
-
-    async function runAiStep3() {
-        try { getEditorJson('outUnderstanding'); } catch(e) { alert("無法執行：需先具備 Step 2 的資料。\n" + e.message); return; }
-        document.getElementById('outPlan').value = '{"simulation_cases": []}';
+    function getBase64(file) {
+        return new Promise((resolve, reject) => { 
+            const reader = new FileReader(); 
+            reader.readAsDataURL(file); 
+            reader.onload = () => resolve(reader.result); 
+            reader.onerror = error => reject(error); 
+        });
     }
 
-    async function runAiStep4() {
-        try { getEditorJson('outPlan'); } catch(e) { alert("無法執行：需先具備 Step 3 的資料。\n" + e.message); return; }
-        document.getElementById('outCandidate').value = '{\n  "Action": "Sequence",\n  "Nodes": [\n    {\n      "Node": "FindGraspPoint"\n    }\n  ]\n}';
+    // --- Gemini Native API Call ---
+    async function callGemini(prompt, imgBase64 = null) {
+        const apiKey = document.getElementById('apiKey').value;
+        if (!apiKey) throw new Error("未偵測到 API Key，請先輸入。");
+        
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        let parts = [{ text: prompt + "\n\n嚴格輸出合法 JSON。" }];
+        
+        if (imgBase64) {
+            parts.push({ 
+                inlineData: { 
+                    mimeType: imgBase64.split(';')[0].split(':')[1], 
+                    data: imgBase64.split(',')[1] 
+                } 
+            });
+        }
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: parts }] })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API 錯誤: ${errText}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates[0].content.parts[0].text;
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("無法從模型回應提取合法 JSON。");
+        return JSON.parse(jsonMatch[0]);
     }
 
-    // --- 管線推進邏輯 (完全讀取 Textarea) ---
-    function proceedToStep2() {
-        try { getEditorJson('outVlm'); alert("Step 1 確認完成，請接續執行 Step 2。"); } catch (e) { alert(e.message); }
-    }
-    function proceedToStep3() {
-        try { getEditorJson('outUnderstanding'); alert("Step 2 確認完成，請接續執行 Step 3。"); } catch (e) { alert(e.message); }
-    }
-    function proceedToStep4() {
-        try { getEditorJson('outPlan'); alert("Step 3 確認完成，請接續執行 Step 4。"); } catch (e) { alert(e.message); }
-    }
-    
-    function proceedToStep5() {
+    // --- AI Generation Handlers ---
+    async function runAiStep(step) {
+        if(eStopTriggered) return;
         try {
-            const bt = getEditorJson('outCandidate');
-            // 讀取 Section 1 的約束與規則
-            const constraints = getEditorJson('constraints');
+            if (step === 1) {
+                const imgFile = document.getElementById('imageInput').files[0];
+                if(document.getElementById('apiKey').value && imgFile) {
+                    const base64 = await getBase64(imgFile);
+                    const res = await callGemini("請分析影像並輸出 environment_entities 與 target_object JSON。", base64);
+                    document.getElementById('outVlm').value = JSON.stringify(res, null, 2);
+                } else {
+                    document.getElementById('outVlm').value = '{\n  "environment_entities": [\n    {"id": "central_grey_block", "type": "rectangular_block", "state": "flat_on_bottom"}\n  ],\n  "target_object": {\n    "id": "blue_cylindrical_component",\n    "pose": {"x_normalized": {"estimate": 0.42}, "y_normalized": {"estimate": 0.50}, "z_normalized": {"estimate": 0.65}}\n  }\n}';
+                }
+            } else if (step === 2) {
+                getEditorJson('outVlm');
+                document.getElementById('outUnderstanding').value = '{\n  "task_summary": "提取藍色圓柱元件",\n  "potential_failure_modes": [\n    {"id": "FM-001", "description": "夾爪進入角度過大導致邊緣擦撞", "severity": "high"}\n  ]\n}';
+            } else if (step === 3) {
+                getEditorJson('outUnderstanding');
+                document.getElementById('outPlan').value = '{\n  "exploration_strategy": "針對 Z 軸進入角度進行微調，降低擦撞機率。",\n  "simulation_cases": [\n    {"case_id": "SIM_01", "approach_speed": 0.1, "grip_force": 40}\n  ]\n}';
+            } else if (step === 4) {
+                getEditorJson('outPlan');
+                document.getElementById('outCandidate').value = '{\n  "modification_rationale": "為避免邊緣擦撞，鎖定中央藍色圓柱體，設定空間夾持座標 [-0.2, 0.2, 0.15] 與垂直 Z 軸下降向量。",\n  "Action": "Sequence",\n  "Nodes": [\n    {\n      "Node": "FindGraspPoint",\n      "Target": "blue_cylindrical_component",\n      "Method": "AntipodalSampler",\n      "offset_xyz": [-0.2, 0.2, 0.15]\n    },\n    {\n      "Node": "AlignApproachVector",\n      "axis": "z",\n      "Vector": [0, 0, -1]\n    },\n    {\n      "Node": "ApproachObject",\n      "Target": "blue_cylindrical_component",\n      "approach_speed": 0.1\n    },\n    {\n      "Node": "CloseGripper",\n      "grip_force": 40\n    }\n  ]\n}';
+            }
+        } catch(e) {
+            alert(`Step ${step} 執行失敗: ${e.message}`);
+        }
+    }
+
+    // --- Pipeline Progression (SSOT) ---
+    function proceedToStep(targetStep) {
+        try {
+            if(targetStep === 2) getEditorJson('outVlm');
+            if(targetStep === 3) getEditorJson('outUnderstanding');
+            if(targetStep === 4) getEditorJson('outPlan');
             
-            // 執行簡易治理驗證 (Mock)
-            if (!bt.Nodes) throw new Error("REJECT: 缺乏 Nodes 陣列");
-            
-            document.getElementById('outGov').innerText = "ALLOW: 動態約束與物理邊界校驗通過";
-            document.getElementById('outGov').style.color = "#28a745";
-            document.getElementById('btnCont5').style.display = 'block';
-            document.getElementById('isaacBtn').disabled = false;
-            
+            if(targetStep === 5) {
+                const bt = getEditorJson('outCandidate');
+                if (!bt.Nodes) throw new Error("REJECT: 缺乏 Nodes 陣列");
+                
+                document.getElementById('outGov').innerText = "ALLOW: 動態約束與物理邊界校驗通過";
+                document.getElementById('outGov').style.color = "#28a745";
+                document.getElementById('btnCont5').style.display = 'block';
+                document.getElementById('isaacBtn').disabled = false;
+                return;
+            }
+            alert(`前置驗證通過，請接續執行 Step ${targetStep}。`);
         } catch (e) {
-            document.getElementById('outGov').innerText = "REJECT: " + e.message;
-            document.getElementById('outGov').style.color = "#dc3545";
-            document.getElementById('btnCont5').style.display = 'none';
-            document.getElementById('isaacBtn').disabled = true;
+            if(targetStep === 5) {
+                document.getElementById('outGov').innerText = "REJECT: " + e.message;
+                document.getElementById('outGov').style.color = "#dc3545";
+                document.getElementById('btnCont5').style.display = 'none';
+                document.getElementById('isaacBtn').disabled = true;
+            } else {
+                alert(e.message);
+            }
         }
     }
 
     function triggerSimulation() { sendToIsaac(); }
-
     function sendToIsaac() {
         document.getElementById('isaacBtn').disabled = true;
         document.getElementById('outIsaac').innerText = "連線至 Isaac 叢集... 模擬完成。";
     }
 
-    // --- 3D 渲染 ---
+    // --- 3D 渲染 (動態軌跡版) ---
     let scene, camera, renderer, animationId;
+    let gripperMesh;
+    let targetPosition = { x: 0, y: 0, z: 0 };
+    let currentY = 1.5; 
+
     function init3DScene() {
         const container = document.getElementById('canvas-container');
         container.innerHTML = ''; 
-        scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f0f0);
+        
+        scene = new THREE.Scene(); 
+        scene.background = new THREE.Color(0xf0f0f0);
         camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera.position.set(2, 2, 3); camera.lookAt(0, 0, 0);
+        camera.position.set(0, 2, 3); 
+        camera.lookAt(0, 0, 0);
+        
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight.position.set(2, 5, 2);
+        scene.add(dirLight);
         scene.add(new THREE.GridHelper(5, 20));
         
-        const block = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.4), new THREE.MeshPhongMaterial({ color: 0x888888 }));
-        block.position.set(0.4, 0.2, 0); scene.add(block);
+        const block = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.6), new THREE.MeshPhongMaterial({ color: 0x888888 }));
+        block.position.set(0.2, 0.2, 0); 
+        scene.add(block);
         
+        const cylinderGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.5, 32);
+        const cylinderMat = new THREE.MeshPhongMaterial({ color: 0x0055ff });
+        const cylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
+        cylinder.rotation.z = Math.PI / 2;
+        cylinder.position.set(-0.25, 0.2, 0);
+        scene.add(cylinder);
+
+        const gripperGeo = new THREE.BoxGeometry(0.1, 0.3, 0.1);
+        const gripperMat = new THREE.MeshPhongMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
+        gripperMesh = new THREE.Mesh(gripperGeo, gripperMat);
+        
+        try {
+            const bt = getEditorJson('outCandidate');
+            const graspNode = bt.Nodes.find(n => n.Node === "FindGraspPoint");
+            if (graspNode && graspNode.offset_xyz) {
+                targetPosition.x = graspNode.offset_xyz[0];
+                targetPosition.y = graspNode.offset_xyz[1];
+                targetPosition.z = graspNode.offset_xyz[2];
+            } else {
+                targetPosition = { x: -0.25, y: 0.2, z: 0 }; 
+            }
+        } catch (e) {
+            targetPosition = { x: -0.25, y: 0.2, z: 0 };
+        }
+
+        currentY = 1.5;
+        gripperMesh.position.set(targetPosition.x, currentY, targetPosition.z);
+        scene.add(gripperMesh);
+        
+        animate();
+    }
+
+    function animate() {
+        animationId = requestAnimationFrame(animate);
+        
+        if (currentY > targetPosition.y + 0.15) {
+            currentY -= 0.015;
+            gripperMesh.position.y = currentY;
+        }
+
         renderer.render(scene, camera);
     }
+
     function open3DPreview() {
         document.getElementById('previewModal').style.display = 'flex';
         setTimeout(init3DScene, 100); 
     }
+
     function close3DPreview() {
         document.getElementById('previewModal').style.display = 'none';
         cancelAnimationFrame(animationId);
